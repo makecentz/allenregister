@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CartLink } from "@/components/cart";
 
 export function SiteHeader() {
   return (
@@ -16,7 +17,7 @@ export function SiteHeader() {
         <Link href="/memberships">Membership</Link>
         <Link href="/donate">Donate</Link>
       </nav>
-      <Link className="account-link" href="/login">Sign in</Link>
+      <div className="header-actions"><CartLink /><Link className="account-link" href="/login">Sign in</Link></div>
     </header>
   );
 }
