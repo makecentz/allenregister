@@ -12,6 +12,7 @@ export type CatalogItem = {
   capacity: number | null;
   price_cents: number;
   inventory_quantity: number | null;
+  metadata: Record<string, unknown>;
 };
 
 export function formatPrice(priceCents: number) {
@@ -22,7 +23,7 @@ export async function getPublishedCatalogItems(itemType: CatalogItem["item_type"
   const supabase = await createClient();
   const { data } = await supabase
     .from("catalog_items")
-    .select("id,item_type,title,short_description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity")
+    .select("id,item_type,title,short_description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata")
     .eq("item_type", itemType)
     .eq("status", "published")
     .order("starts_on", { ascending: true, nullsFirst: false })
