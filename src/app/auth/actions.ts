@@ -39,7 +39,7 @@ export async function signIn(formData: FormData) {
 export async function sendPasswordReset(formData: FormData) {
   const supabase = await createClient();
   const origin = (await headers()).get("origin") ?? "";
-  const { error } = await supabase.auth.resetPasswordForEmail(value(formData, "email"), { redirectTo: `${origin}/update-password` });
+  const { error } = await supabase.auth.resetPasswordForEmail(value(formData, "email"), { redirectTo: `${origin}/auth/confirm?next=/update-password` });
   if (error) redirect(withMessage("/forgot-password", "error", error.message));
   redirect(withMessage("/login", "message", "If an account exists for this address, we sent password-reset instructions."));
 }
