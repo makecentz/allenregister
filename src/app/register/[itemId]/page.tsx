@@ -1,0 +1,19 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { startRegistration } from "@/app/register/actions";
+import { createClient } from "@/lib/supabase/server";
+import { formatPrice } from "@/lib/catalog";
+
+export const instant = false;
+
+export default async function RegisterPage({ params, searchParams }: { params: Promise<{ itemId: string }>; searchParams: Promise<{ error?: string }> }) {
+  const { itemId } = await params;
+  const { error } = await searchParams;
+  const supabase = await createClient();
+  const { data: item } = await supabase.from("catalog_items").select("id,title,item_type,short_description,audience,starts_on,ends_on,location,price_cents").eq("id", itemId).eq("status", "published").in("item_type", ["class", "camp"]).maybeSingle();
+  if (!item) notFound();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims) redirect(`/signup?next=/register/${itemId}`);
+
+  return <main className="registration-page"><Link href={item.item_type === "camp" ? "/camp" : "/classes"}>← Back to {item.item_type === "camp" ? "summer camp" : "classes"}</Link><div className="registration-layout"><section className="registration-summary"><p className="eyebrow">{item.item_type === "camp" ? "Summer camp registration" : "Class registration"}</p><h1>{item.title}</h1><p>{item.short_description}</p><dl><dt>When</dt><dd>{[item.starts_on, item.ends_on].filter(Boolean).join(" – ") || "Dates to be announced"}</dd><dt>Where</dt><dd>{item.location ?? "Allens Lane Art Center"}</dd><dt>Tuition</dt><dd>{formatPrice(item.price_cents)}</dd></dl></section><section className="registration-form"><p className="eyebrow">Step 1 of 2</p><h2>Who is registering?</h2><p>Add the participant details. Your registration will be saved as a draft; payment is not collected yet.</p>{error ? <p className="form-error" role="alert">{error}</p> : null}<form action={startRegistration}><input type="hidden" name="catalogItemId" value={item.id} /><label>First name<input name="firstName" required autoComplete="given-name" /></label><label>Last name<input name="lastName" required autoComplete="family-name" /></label><label>Date of birth <span>(recommended for youth programs)</span><input name="birthDate" type="date" /></label><button className="button button-primary">Save registration</button></form></section></div></main>;
+}
