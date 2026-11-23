@@ -40,6 +40,12 @@ export async function getPublishedClassBySlug(slug: string) {
   return data as CatalogItem | null;
 }
 
+export async function getPublishedCampBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata").eq("item_type", "camp").eq("status", "published").eq("slug", slug).maybeSingle();
+  return data as CatalogItem | null;
+}
+
 export type DonationFund = { id: string; name: string; description: string | null };
 
 export async function getActiveDonationFunds() {

@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { AdminCampForm } from "@/components/admin-camp-form";
+import { updateCamp } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/server";
+export const instant = false;
+export default async function EditCampPage({ params, searchParams }: { params: Promise<{ itemId: string }>; searchParams: Promise<{ error?: string }> }) { const { itemId } = await params; const { error } = await searchParams; const supabase = await createClient(); const { data: claimsData } = await supabase.auth.getClaims(); const user = claimsData?.claims; if (!user) redirect(`/login?next=/admin/camp/${itemId}`); const { data: role } = await supabase.from("staff_roles").select("role").eq("user_id", user.sub).maybeSingle(); if (!role) redirect("/admin"); const { data: item } = await supabase.from("catalog_items").select("id,title,status,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,metadata").eq("id", itemId).eq("item_type", "camp").maybeSingle(); if (!item) notFound(); return <main className="admin-page"><header className="admin-header"><div><p className="eyebrow">Allens Lane staff portal</p><h1>Edit camp session</h1></div><Link className="admin-home" href="/admin/camp">← Summer camp</Link></header>{error ? <p className="form-error">{error}</p> : null}<AdminCampForm action={updateCamp} item={item} /></main>; }

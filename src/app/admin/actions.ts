@@ -103,6 +103,40 @@ function classPayload(formData: FormData, existingMetadata: Record<string, unkno
   };
 }
 
+function campPayload(formData: FormData, existingMetadata: Record<string, unknown> = {}) {
+  const title = text(formData, "title");
+  const status = text(formData, "status");
+  const priceCents = moneyToCents(text(formData, "price"));
+  const earlyBirdCents = moneyToCents(text(formData, "earlyBirdPrice"));
+  const afterCareCents = moneyToCents(text(formData, "afterCarePrice"));
+  const capacityText = text(formData, "capacity");
+  const capacity = capacityText ? Number(capacityText) : null;
+  if (!title || !["draft", "published", "archived"].includes(status) || priceCents === null || earlyBirdCents === null || afterCareCents === null || (capacity !== null && (!Number.isInteger(capacity) || capacity < 1))) return null;
+  return { title, status, short_description: text(formData, "summary") || null, description: text(formData, "description") || null, audience: text(formData, "audience") || null, starts_on: text(formData, "startsOn") || null, ends_on: text(formData, "endsOn") || null, location: text(formData, "location") || null, capacity, price_cents: priceCents, requires_registration: true, published_at: status === "published" ? new Date().toISOString() : null, metadata: { ...existingMetadata, schedule_text: text(formData, "scheduleText") || null, age_range: text(formData, "ageRange") || null, theme: text(formData, "theme") || null, early_bird_price_cents: earlyBirdCents, aftercare_price_cents: afterCareCents, beforecare_text: text(formData, "beforeCare") || null } };
+}
+
+export async function createCamp(formData: FormData) {
+  const supabase = await requireStaff("/admin/camp/new");
+  const payload = campPayload(formData);
+  if (!payload) redirect("/admin/camp/new?error=Please+complete+the+required+camp+details.");
+  const { error } = await supabase.from("catalog_items").insert({ ...payload, item_type: "camp", slug: `${slugify(payload.title)}-${Date.now().toString(36)}` });
+  if (error) redirect(`/admin/camp/new?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/camp"); revalidatePath("/admin"); redirect("/admin/camp?message=Camp+session+created");
+}
+
+export async function updateCamp(formData: FormData) {
+  const itemId = text(formData, "itemId");
+  if (!itemId) redirect("/admin/camp");
+  const supabase = await requireStaff(`/admin/camp/${itemId}`);
+  const { data: existing } = await supabase.from("catalog_items").select("metadata").eq("id", itemId).eq("item_type", "camp").maybeSingle();
+  if (!existing) redirect("/admin/camp?error=Camp+session+not+found.");
+  const payload = campPayload(formData, (existing.metadata ?? {}) as Record<string, unknown>);
+  if (!payload) redirect(`/admin/camp/${itemId}?error=Please+complete+the+required+camp+details.`);
+  const { error } = await supabase.from("catalog_items").update(payload).eq("id", itemId);
+  if (error) redirect(`/admin/camp/${itemId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/camp"); revalidatePath("/admin"); redirect("/admin/camp?message=Camp+session+updated");
+}
+
 async function replaceClassCategories(supabase: Awaited<ReturnType<typeof createClient>>, itemId: string, formData: FormData) {
   const selectedIds = [text(formData, "programCategory"), text(formData, "mediumCategory")].filter(Boolean);
   if (selectedIds.length !== 2) return "Choose one program category and one medium category.";
