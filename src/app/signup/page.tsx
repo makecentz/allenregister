@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { signUp } from "@/app/auth/actions";
 
-export default function SignUpPage() {
-  return <main className="auth-page"><Link href="/">← Back to home</Link><section className="auth-card"><p className="eyebrow">Create your account</p><h1>Join Allens Lane</h1><form action={signUp}><label>Name<input name="fullName" required autoComplete="name" /></label><label>Email<input name="email" type="email" required autoComplete="email" /></label><label>Password<input name="password" type="password" minLength={8} required autoComplete="new-password" /></label><button className="button button-primary">Create account</button></form><p>Already have an account? <Link href="/login">Sign in</Link></p></section></main>;
+export const instant = false;
+
+export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/account";
+  return <main className="auth-page"><Link href="/">← Back to home</Link><section className="auth-card"><p className="eyebrow">Create your account</p><h1>Join Allens Lane</h1><p>Create an account to register, purchase, and keep your experiences together.</p><form action={signUp}><input type="hidden" name="next" value={destination} /><label>Name<input name="fullName" required autoComplete="name" /></label><label>Email<input name="email" type="email" required autoComplete="email" /></label><label>Password<input name="password" type="password" minLength={8} required autoComplete="new-password" /></label><button className="button button-primary">Create account</button></form><p>Already have an account? <Link href={`/login?next=${encodeURIComponent(destination)}`}>Sign in</Link></p></section></main>;
 }
