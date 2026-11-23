@@ -1,6 +1,7 @@
 import { SiteFrame } from "@/components/site-frame";
 import { formatPrice, getPublishedCatalogItems } from "@/lib/catalog";
 import { CartAddButton } from "@/components/cart";
+import Link from "next/link";
 
 export const instant = false;
 
@@ -19,6 +20,7 @@ export default async function ClassesPage() {
     const materials = typeof metadata.materials_fee_cents === "number" && metadata.materials_fee_cents > 0 ? ` + ${formatPrice(metadata.materials_fee_cents)} materials` : "";
     return {
       id: item.id,
+      slug: item.slug,
       audience: item.audience ?? "All ages",
       title: item.title,
       courseCode: metadata.course_code,
@@ -32,13 +34,13 @@ export default async function ClassesPage() {
       availability: metadata.availability,
       tone: ["clay", "sun", "violet", "red"][index % 4],
     };
-  }) : classes.map((item) => ({ ...item, id: null, priceCents: 0, courseCode: null, instructor: null, medium: "All Media", memberPrice: null, materials: "", availability: "open" }));
+  }) : classes.map((item) => ({ ...item, id: null, slug: null, priceCents: 0, courseCode: null, instructor: null, medium: "All Media", memberPrice: null, materials: "", availability: "open" }));
   return <SiteFrame><main className="catalog-page">
     <section className="catalog-intro"><p className="eyebrow">Registration</p><h1>Classes for every maker.</h1><p>Find a class that fits your practice, your schedule, and your curiosity.</p></section>
     <section className="catalog-tools" aria-label="Class filters"><button className="filter-pill">All programs</button><button className="filter-pill">Adults</button><button className="filter-pill">Youth</button><button className="filter-pill">Ceramics</button></section>
     <section className="class-list" aria-label="Available classes">{items.map((item) => <article className="class-card" key={item.id ?? item.title}>
       <div className={`class-art ${item.tone}`} aria-hidden="true">{item.audience}</div>
-      <div className="class-card-copy"><p className="eyebrow">{item.medium} · {item.audience}</p><h2>{item.title}</h2>{item.courseCode ? <p className="eyebrow">{item.courseCode}{item.instructor ? ` · ${item.instructor}` : ""}</p> : null}<p>{item.detail}</p><div><strong>{item.price}</strong>{item.memberPrice ? <span className="class-member-price">{item.memberPrice} members{item.materials}</span> : null}{item.availability === "waitlist" ? <span className="class-waitlist">Waitlist only</span> : item.availability === "info" ? <span className="class-waitlist">Contact us</span> : <CartAddButton item={item.id ? { id: item.id, title: item.title, itemType: "class", priceCents: item.priceCents } : null} label="Add class" />}</div></div>
+      <div className="class-card-copy"><p className="eyebrow">{item.medium} · {item.audience}</p><h2>{item.slug ? <Link href={`/classes/${item.slug}`}>{item.title}</Link> : item.title}</h2>{item.courseCode ? <p className="eyebrow">{item.courseCode}{item.instructor ? ` · ${item.instructor}` : ""}</p> : null}<p>{item.detail}</p><div><strong>{item.price}</strong>{item.memberPrice ? <span className="class-member-price">{item.memberPrice} members{item.materials}</span> : null}{item.slug ? <Link className="text-link" href={`/classes/${item.slug}`}>Details →</Link> : null}{item.availability === "waitlist" ? <span className="class-waitlist">Waitlist only</span> : item.availability === "info" ? <span className="class-waitlist">Contact us</span> : <CartAddButton item={item.id ? { id: item.id, title: item.title, itemType: "class", priceCents: item.priceCents } : null} label="Add class" />}</div></div>
     </article>)}</section>
   </main></SiteFrame>;
 }

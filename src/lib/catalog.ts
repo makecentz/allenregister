@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export type CatalogItem = {
   id: string;
+  slug: string;
   item_type: "class" | "camp" | "event" | "product" | "membership";
   title: string;
   short_description: string | null;
+  description: string | null;
   audience: string | null;
   starts_on: string | null;
   ends_on: string | null;
@@ -23,13 +25,19 @@ export async function getPublishedCatalogItems(itemType: CatalogItem["item_type"
   const supabase = await createClient();
   const { data } = await supabase
     .from("catalog_items")
-    .select("id,item_type,title,short_description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata")
+    .select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata")
     .eq("item_type", itemType)
     .eq("status", "published")
     .order("starts_on", { ascending: true, nullsFirst: false })
     .order("sort_order", { ascending: true });
 
   return (data ?? []) as CatalogItem[];
+}
+
+export async function getPublishedClassBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata").eq("item_type", "class").eq("status", "published").eq("slug", slug).maybeSingle();
+  return data as CatalogItem | null;
 }
 
 export type DonationFund = { id: string; name: string; description: string | null };
