@@ -11,6 +11,15 @@ function slugify(value: string) {
   return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+export async function createDonationFund(formData: FormData) {
+  const name = text(formData, "name");
+  if (!name) redirect("/admin/funds/new?error=Please+enter+a+fund+name.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("donation_funds").insert({ name, slug: `${slugify(name)}-${Date.now().toString(36)}`, description: text(formData, "description") || null, is_active: true });
+  if (error) redirect(`/admin/funds/new?error=${encodeURIComponent(error.message)}`);
+  redirect("/admin/funds?message=Donation+fund+created");
+}
+
 export async function createCatalogItem(formData: FormData) {
   const title = text(formData, "title");
   const itemType = text(formData, "itemType");

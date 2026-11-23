@@ -30,3 +30,11 @@ export async function getPublishedCatalogItems(itemType: CatalogItem["item_type"
 
   return (data ?? []) as CatalogItem[];
 }
+
+export type DonationFund = { id: string; name: string; description: string | null };
+
+export async function getActiveDonationFunds() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("donation_funds").select("id,name,description").eq("is_active", true).order("sort_order", { ascending: true });
+  return (data ?? []) as DonationFund[];
+}
