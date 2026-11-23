@@ -29,6 +29,44 @@ function moneyToCents(value: string) {
   return Number.isFinite(cents) && cents >= 0 ? cents : null;
 }
 
+function instructorPayload(formData: FormData) {
+  const fullName = text(formData, "fullName");
+  const status = text(formData, "status");
+  const sortOrder = Number(text(formData, "sortOrder") || "0");
+  if (!fullName || !["draft", "published", "archived"].includes(status) || !Number.isInteger(sortOrder) || sortOrder < 0) return null;
+  const url = (name: string) => {
+    const value = text(formData, name);
+    if (!value) return null;
+    try { return new URL(value).toString(); } catch { return undefined; }
+  };
+  const imageUrl = url("imageUrl");
+  const websiteUrl = url("websiteUrl");
+  if (imageUrl === undefined || websiteUrl === undefined) return null;
+  return { full_name: fullName, status, sort_order: sortOrder, short_bio: text(formData, "shortBio") || null, biography: text(formData, "biography") || null, image_url: imageUrl, website_url: websiteUrl, specialties: text(formData, "specialties").split(",").map((value) => value.trim()).filter(Boolean), published_at: status === "published" ? new Date().toISOString() : null };
+}
+
+export async function createInstructor(formData: FormData) {
+  const supabase = await requireStaff("/admin/instructors/new");
+  const payload = instructorPayload(formData);
+  if (!payload) redirect("/admin/instructors/new?error=Please+complete+the+required+details+and+use+valid+URLs.");
+  const { error } = await supabase.from("instructors").insert({ ...payload, slug: `${slugify(payload.full_name)}-${Date.now().toString(36)}` });
+  if (error) redirect(`/admin/instructors/new?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/instructors"); revalidatePath("/admin");
+  redirect("/admin/instructors?message=Instructor+created");
+}
+
+export async function updateInstructor(formData: FormData) {
+  const instructorId = text(formData, "instructorId");
+  if (!instructorId) redirect("/admin/instructors");
+  const supabase = await requireStaff(`/admin/instructors/${instructorId}`);
+  const payload = instructorPayload(formData);
+  if (!payload) redirect(`/admin/instructors/${instructorId}?error=Please+complete+the+required+details+and+use+valid+URLs.`);
+  const { error } = await supabase.from("instructors").update(payload).eq("id", instructorId);
+  if (error) redirect(`/admin/instructors/${instructorId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/instructors"); revalidatePath("/admin");
+  redirect("/admin/instructors?message=Instructor+updated");
+}
+
 function classPayload(formData: FormData, existingMetadata: Record<string, unknown> = {}) {
   const title = text(formData, "title");
   const status = text(formData, "status");
