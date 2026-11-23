@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import Stripe from "stripe";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getStripe } from "@/lib/stripe";
+
+export async function POST(request: Request) {
+  const signature = request.headers.get("stripe-signature");
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!signature || !webhookSecret) return new NextResponse("Webhook is not configured", { status: 400 });
+  let event: Stripe.Event;
+  try { event = getStripe().webhooks.constructEvent(await request.text(), signature, webhookSecret); } catch { return new NextResponse("Invalid webhook signature", { status: 400 }); }
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const registrationId = session.metadata?.registration_id;
+    if (registrationId && session.payment_status === "paid") {
+      try {
+        const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+        const { error } = await createAdminClient().from("registrations").update({ status: "confirmed", stripe_checkout_session_id: session.id, stripe_payment_intent_id: paymentIntentId }).eq("id", registrationId).eq("status", "draft");
+        if (error) return new NextResponse("Unable to confirm registration", { status: 500 });
+      } catch { return new NextResponse("Unable to confirm registration", { status: 500 }); }
+    }
+  }
+  return NextResponse.json({ received: true });
+}
