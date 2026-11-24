@@ -41,9 +41,9 @@ export function CartLink() {
   return <Link className="cart-link" href="/cart">Cart{count ? ` (${count})` : ""}</Link>;
 }
 
-export function CartAddButton({ item, label = "Add to cart" }: { item: Omit<CartItem, "quantity"> | null; label?: string }) {
+export function CartAddButton({ item, label = "Add to cart", unavailableLabel = "Coming soon" }: { item: Omit<CartItem, "quantity"> | null; label?: string; unavailableLabel?: string }) {
   const { addItem } = useCart();
-  if (!item) return <button className="button button-primary" disabled>Coming soon</button>;
+  if (!item) return <button className="button button-primary" disabled>{unavailableLabel}</button>;
   return <button className="button button-primary" onClick={() => addItem(item)}>{label}</button>;
 }
 

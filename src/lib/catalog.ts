@@ -14,6 +14,7 @@ export type CatalogItem = {
   capacity: number | null;
   price_cents: number;
   inventory_quantity: number | null;
+  image_path: string | null;
   metadata: Record<string, unknown>;
 };
 
@@ -25,7 +26,7 @@ export async function getPublishedCatalogItems(itemType: CatalogItem["item_type"
   const supabase = await createClient();
   const { data } = await supabase
     .from("catalog_items")
-    .select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata")
+    .select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,image_path,metadata")
     .eq("item_type", itemType)
     .eq("status", "published")
     .order("starts_on", { ascending: true, nullsFirst: false })
@@ -36,13 +37,19 @@ export async function getPublishedCatalogItems(itemType: CatalogItem["item_type"
 
 export async function getPublishedClassBySlug(slug: string) {
   const supabase = await createClient();
-  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata").eq("item_type", "class").eq("status", "published").eq("slug", slug).maybeSingle();
+  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,image_path,metadata").eq("item_type", "class").eq("status", "published").eq("slug", slug).maybeSingle();
   return data as CatalogItem | null;
 }
 
 export async function getPublishedCampBySlug(slug: string) {
   const supabase = await createClient();
-  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,metadata").eq("item_type", "camp").eq("status", "published").eq("slug", slug).maybeSingle();
+  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,image_path,metadata").eq("item_type", "camp").eq("status", "published").eq("slug", slug).maybeSingle();
+  return data as CatalogItem | null;
+}
+
+export async function getPublishedProductBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("catalog_items").select("id,slug,item_type,title,short_description,description,audience,starts_on,ends_on,location,capacity,price_cents,inventory_quantity,image_path,metadata").eq("item_type", "product").eq("status", "published").eq("slug", slug).maybeSingle();
   return data as CatalogItem | null;
 }
 

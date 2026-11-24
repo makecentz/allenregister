@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { AdminProductForm } from "@/components/admin-product-form";
+import { updateProduct } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/server";
+export const instant = false;
+export default async function EditProductPage({ params, searchParams }: { params: Promise<{ itemId: string }>; searchParams: Promise<{ error?: string }> }) { const { itemId } = await params; const { error } = await searchParams; const supabase = await createClient(); const { data: claimsData } = await supabase.auth.getClaims(); const user = claimsData?.claims; if (!user) redirect(`/login?next=/admin/products/${itemId}`); const { data: role } = await supabase.from("staff_roles").select("role").eq("user_id", user.sub).maybeSingle(); if (!role) redirect("/admin"); const { data: item } = await supabase.from("catalog_items").select("id,title,status,short_description,description,audience,price_cents,inventory_quantity,image_path,metadata").eq("id", itemId).eq("item_type", "product").maybeSingle(); if (!item) notFound(); return <main className="admin-page"><header className="admin-header"><div><p className="eyebrow">Allens Lane staff portal</p><h1>Edit product</h1></div><Link className="admin-home" href="/admin/products">← Shop inventory</Link></header>{error ? <p className="form-error">{error}</p> : null}<AdminProductForm action={updateProduct} item={item} /></main>; }

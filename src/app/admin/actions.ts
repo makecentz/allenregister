@@ -137,6 +137,58 @@ export async function updateCamp(formData: FormData) {
   revalidatePath("/camp"); revalidatePath("/admin"); redirect("/admin/camp?message=Camp+session+updated");
 }
 
+function productPayload(formData: FormData, existingMetadata: Record<string, unknown> = {}) {
+  const title = text(formData, "title");
+  const status = text(formData, "status");
+  const priceCents = moneyToCents(text(formData, "price"));
+  const inventoryText = text(formData, "inventoryQuantity");
+  const inventoryQuantity = inventoryText ? Number(inventoryText) : null;
+  const imageUrl = text(formData, "imageUrl");
+  if (!title || !["draft", "published", "archived"].includes(status) || priceCents === null || (inventoryQuantity !== null && (!Number.isInteger(inventoryQuantity) || inventoryQuantity < 0))) return null;
+  if (imageUrl) { try { new URL(imageUrl); } catch { return null; } }
+  return {
+    title,
+    status,
+    short_description: text(formData, "summary") || null,
+    description: text(formData, "description") || null,
+    audience: text(formData, "category") || "Shop",
+    price_cents: priceCents,
+    inventory_quantity: inventoryQuantity,
+    image_path: imageUrl || null,
+    requires_registration: false,
+    published_at: status === "published" ? new Date().toISOString() : null,
+    metadata: {
+      ...existingMetadata,
+      sku: text(formData, "sku") || null,
+      material: text(formData, "material") || null,
+      fulfillment: text(formData, "fulfillment") || "pickup",
+      taxable: text(formData, "taxable") === "yes",
+    },
+  };
+}
+
+export async function createProduct(formData: FormData) {
+  const supabase = await requireStaff("/admin/products/new");
+  const payload = productPayload(formData);
+  if (!payload) redirect("/admin/products/new?error=Please+complete+the+required+product+details.");
+  const { error } = await supabase.from("catalog_items").insert({ ...payload, item_type: "product", slug: `${slugify(payload.title)}-${Date.now().toString(36)}` });
+  if (error) redirect(`/admin/products/new?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/shop"); revalidatePath("/admin"); redirect("/admin/products?message=Product+created");
+}
+
+export async function updateProduct(formData: FormData) {
+  const itemId = text(formData, "itemId");
+  if (!itemId) redirect("/admin/products");
+  const supabase = await requireStaff(`/admin/products/${itemId}`);
+  const { data: existing } = await supabase.from("catalog_items").select("metadata").eq("id", itemId).eq("item_type", "product").maybeSingle();
+  if (!existing) redirect("/admin/products?error=Product+not+found.");
+  const payload = productPayload(formData, (existing.metadata ?? {}) as Record<string, unknown>);
+  if (!payload) redirect(`/admin/products/${itemId}?error=Please+complete+the+required+product+details.`);
+  const { error } = await supabase.from("catalog_items").update(payload).eq("id", itemId);
+  if (error) redirect(`/admin/products/${itemId}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/shop"); revalidatePath("/admin"); redirect("/admin/products?message=Product+updated");
+}
+
 async function replaceClassCategories(supabase: Awaited<ReturnType<typeof createClient>>, itemId: string, formData: FormData) {
   const selectedIds = [text(formData, "programCategory"), text(formData, "mediumCategory")].filter(Boolean);
   if (selectedIds.length !== 2) return "Choose one program category and one medium category.";

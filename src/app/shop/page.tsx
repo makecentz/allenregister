@@ -1,18 +1,13 @@
+import Link from "next/link";
 import { SiteFrame } from "@/components/site-frame";
 import { formatPrice, getPublishedCatalogItems } from "@/lib/catalog";
 import { CartAddButton } from "@/components/cart";
 
 export const instant = false;
 
-const products = [
-  { kind: "Supplies", name: "Reclaimed Clay", price: "$20.00", color: "clay" },
-  { kind: "Supplies", name: "Porcelain 213", price: "$35.00", color: "violet" },
-  { kind: "Merchandise", name: "Allens Lane Crewneck", price: "$42.00", color: "green" },
-  { kind: "Merchandise", name: "We Belong Tote", price: "$18.00", color: "red" },
-] as const;
+const colors = ["clay", "violet", "green", "red"];
 
 export default async function ShopPage() {
-  const publishedProducts = await getPublishedCatalogItems("product");
-  const items = publishedProducts.length ? publishedProducts.map((product, index) => ({ id: product.id, kind: product.audience ?? "Shop", name: product.title, price: formatPrice(product.price_cents), priceCents: product.price_cents, color: ["clay", "violet", "green", "red"][index % 4] })) : products.map((product) => ({ ...product, id: null, priceCents: 0 }));
-  return <SiteFrame><main className="catalog-page"><section className="catalog-intro"><p className="eyebrow">Allens Lane shop</p><h1>Bring the studio home.</h1><p>Pick up ceramics supplies and wear your support for community arts.</p></section><section className="catalog-tools"><button className="filter-pill">All products</button><button className="filter-pill">Supplies</button><button className="filter-pill">Merchandise</button></section><section className="product-grid">{items.map((product) => <article className="product-card" key={product.name}><div className={`product-image ${product.color}`} aria-hidden="true"><span>{product.kind}</span></div><p className="eyebrow">{product.kind}</p><h2>{product.name}</h2><div><strong>{product.price}</strong><CartAddButton item={product.id ? { id: product.id, title: product.name, itemType: "product", priceCents: product.priceCents } : null} /></div></article>)}</section></main></SiteFrame>;
+  const products = await getPublishedCatalogItems("product");
+  return <SiteFrame><main className="catalog-page"><section className="catalog-intro"><p className="eyebrow">Allens Lane shop</p><h1>Bring the studio home.</h1><p>Art supplies and Allens Lane merchandise, managed in one place with the rest of your art-center account.</p></section><section className="catalog-tools" aria-label="Shop categories"><span className="filter-pill active">All products</span><span className="filter-pill">Supplies</span><span className="filter-pill">Merchandise</span><Link className="filter-pill" href="/gift-certificates">Gift certificates</Link></section>{products.length ? <section className="product-grid">{products.map((product, index) => { const soldOut = product.inventory_quantity === 0; return <article className="product-card" key={product.id}><Link href={`/shop/${product.slug}`} className={`product-image ${colors[index % colors.length]}`} style={product.image_path ? { backgroundImage: `url("${product.image_path}")` } : undefined}><span>{product.audience ?? "Shop"}</span></Link><p className="eyebrow">{product.audience ?? "Shop"}</p><h2><Link href={`/shop/${product.slug}`}>{product.title}</Link></h2>{product.short_description ? <p className="product-summary">{product.short_description}</p> : null}<div><strong>{formatPrice(product.price_cents)}</strong><CartAddButton item={soldOut ? null : { id: product.id, title: product.title, itemType: "product", priceCents: product.price_cents }} unavailableLabel="Sold out" /></div></article>; })}</section> : <section className="shop-empty"><p className="eyebrow">New shop coming soon</p><h2>The store is being stocked.</h2><p>Check back soon for art supplies and Allens Lane merchandise. Gift certificates are available now.</p><Link className="button button-primary" href="/gift-certificates">Shop gift certificates</Link></section>}</main></SiteFrame>;
 }
