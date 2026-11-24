@@ -19,6 +19,14 @@ export async function POST(request: Request) {
         if (error) return new NextResponse("Unable to confirm registration", { status: 500 });
       } catch { return new NextResponse("Unable to confirm registration", { status: 500 }); }
     }
+    const orderId = session.metadata?.order_id;
+    if (orderId && session.payment_status === "paid") {
+      try {
+        const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+        const { data, error } = await createAdminClient().rpc("complete_product_order_payment", { checkout_order_id: orderId, checkout_session_id: session.id, payment_intent_id: paymentIntentId });
+        if (error || !["paid", "already_processed", "inventory_issue"].includes(String(data))) return new NextResponse("Unable to complete product order", { status: 500 });
+      } catch { return new NextResponse("Unable to complete product order", { status: 500 }); }
+    }
   }
   return NextResponse.json({ received: true });
 }

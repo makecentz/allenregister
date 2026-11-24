@@ -35,3 +35,64 @@ export async function beginRegistrationCheckout(formData: FormData) {
     redirect("/account?error=Unable+to+start+Stripe+Checkout.+Please+try+again.");
   }
 }
+
+type CartProduct = { id: string; quantity: number };
+
+function cartProducts(value: string): CartProduct[] | null {
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed) || parsed.length > 20) return null;
+    const items = parsed.filter((item): item is { id: unknown; itemType: unknown; quantity: unknown } => Boolean(item) && typeof item === "object")
+      .filter((item) => item.itemType === "product")
+      .map((item) => ({ id: typeof item.id === "string" ? item.id : "", quantity: Number(item.quantity) }));
+    if (!items.length || items.some((item) => !item.id || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99)) return null;
+    return items;
+  } catch { return null; }
+}
+
+export async function beginProductCheckout(formData: FormData) {
+  const requestedItems = cartProducts(String(formData.get("cart") ?? ""));
+  if (!requestedItems) redirect("/cart?error=Your+cart+could+not+be+validated.+Please+try+again.");
+
+  const supabase = await createClient();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims;
+  if (!user) redirect("/login?next=/checkout");
+
+  const ids = [...new Set(requestedItems.map((item) => item.id))];
+  if (ids.length !== requestedItems.length) redirect("/cart?error=Please+remove+duplicate+items+and+try+again.");
+  const { data: products } = await supabase.from("catalog_items").select("id,title,short_description,price_cents,inventory_quantity").in("id", ids).eq("item_type", "product").eq("status", "published");
+  if (!products || products.length !== ids.length) redirect("/cart?error=One+or+more+items+are+no+longer+available.");
+
+  const lines = requestedItems.map((requested) => {
+    const product = products.find((item) => item.id === requested.id);
+    if (!product || (product.inventory_quantity !== null && product.inventory_quantity < requested.quantity)) return null;
+    return { ...product, quantity: requested.quantity };
+  });
+  if (lines.some((line) => !line)) redirect("/cart?error=One+or+more+items+do+not+have+enough+inventory.");
+  const orderLines = lines.filter((line): line is NonNullable<typeof line> => line !== null);
+  const subtotalCents = orderLines.reduce((total, item) => total + item.price_cents * item.quantity, 0);
+
+  const { data: order, error: orderError } = await supabase.from("orders").insert({ account_id: user.sub, subtotal_cents: subtotalCents }).select("id").single();
+  if (orderError || !order) redirect(`/cart?error=${encodeURIComponent(orderError?.message ?? "Unable to save your order.")}`);
+  const { error: linesError } = await supabase.from("order_items").insert(orderLines.map((item) => ({ order_id: order.id, catalog_item_id: item.id, title: item.title, item_type: "product", unit_amount_cents: item.price_cents, quantity: item.quantity })));
+  if (linesError) redirect(`/cart?error=${encodeURIComponent(linesError.message)}`);
+
+  const origin = (await headers()).get("origin");
+  if (!origin) redirect("/cart?error=Unable+to+start+checkout.");
+  try {
+    const session = await getStripe().checkout.sessions.create({
+      mode: "payment",
+      customer_email: user.email,
+      client_reference_id: order.id,
+      metadata: { order_id: order.id, account_id: user.sub, order_type: "product" },
+      line_items: orderLines.map((item) => ({ price_data: { currency: "usd", product_data: { name: item.title, description: item.short_description ?? undefined }, unit_amount: item.price_cents }, quantity: item.quantity })),
+      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/cart?message=Checkout+was+cancelled.+Your+cart+is+still+available.`,
+    });
+    if (!session.url) redirect("/cart?error=Stripe+did+not+return+a+checkout+URL.");
+    redirect(session.url);
+  } catch {
+    redirect("/cart?error=Unable+to+start+Stripe+Checkout.+Please+try+again.");
+  }
+}
