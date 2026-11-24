@@ -5,6 +5,8 @@ import "./auth.css";
 import "./admin.css";
 import { CartProvider } from "@/components/cart";
 
+export const instant = false;
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

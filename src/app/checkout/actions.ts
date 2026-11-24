@@ -36,22 +36,23 @@ export async function beginRegistrationCheckout(formData: FormData) {
   }
 }
 
-type CartProduct = { id: string; quantity: number };
+type CartPurchasable = { id: string; itemType: "product" | "membership"; quantity: number };
 
-function cartProducts(value: string): CartProduct[] | null {
+function cartPurchasable(value: string): CartPurchasable[] | null {
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed) || parsed.length > 20) return null;
-    const items = parsed.filter((item): item is { id: unknown; itemType: unknown; quantity: unknown } => Boolean(item) && typeof item === "object")
-      .filter((item) => item.itemType === "product")
-      .map((item) => ({ id: typeof item.id === "string" ? item.id : "", quantity: Number(item.quantity) }));
-    if (!items.length || items.some((item) => !item.id || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99)) return null;
+    const items = parsed
+      .filter((item): item is { id: unknown; itemType: unknown; quantity: unknown } => Boolean(item) && typeof item === "object")
+      .filter((item) => item.itemType === "product" || item.itemType === "membership")
+      .map((item) => ({ id: typeof item.id === "string" ? item.id : "", itemType: item.itemType as "product" | "membership", quantity: Number(item.quantity) }));
+    if (!items.length || items.some((item) => !item.id || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99 || item.itemType === "membership" && item.quantity !== 1)) return null;
     return items;
   } catch { return null; }
 }
 
 export async function beginProductCheckout(formData: FormData) {
-  const requestedItems = cartProducts(String(formData.get("cart") ?? ""));
+  const requestedItems = cartPurchasable(String(formData.get("cart") ?? ""));
   if (!requestedItems) redirect("/cart?error=Your+cart+could+not+be+validated.+Please+try+again.");
 
   const supabase = await createClient();
@@ -61,13 +62,13 @@ export async function beginProductCheckout(formData: FormData) {
 
   const ids = [...new Set(requestedItems.map((item) => item.id))];
   if (ids.length !== requestedItems.length) redirect("/cart?error=Please+remove+duplicate+items+and+try+again.");
-  const { data: products } = await supabase.from("catalog_items").select("id,title,short_description,price_cents,inventory_quantity").in("id", ids).eq("item_type", "product").eq("status", "published");
-  if (!products || products.length !== ids.length) redirect("/cart?error=One+or+more+items+are+no+longer+available.");
+  const { data: catalogItems } = await supabase.from("catalog_items").select("id,item_type,title,short_description,price_cents,inventory_quantity").in("id", ids).in("item_type", ["product", "membership"]).eq("status", "published");
+  if (!catalogItems || catalogItems.length !== ids.length) redirect("/cart?error=One+or+more+items+are+no+longer+available.");
 
   const lines = requestedItems.map((requested) => {
-    const product = products.find((item) => item.id === requested.id);
-    if (!product || (product.inventory_quantity !== null && product.inventory_quantity < requested.quantity)) return null;
-    return { ...product, quantity: requested.quantity };
+    const catalogItem = catalogItems.find((item) => item.id === requested.id);
+    if (!catalogItem || catalogItem.item_type !== requested.itemType || (catalogItem.item_type === "product" && catalogItem.inventory_quantity !== null && catalogItem.inventory_quantity < requested.quantity)) return null;
+    return { ...catalogItem, quantity: requested.quantity };
   });
   if (lines.some((line) => !line)) redirect("/cart?error=One+or+more+items+do+not+have+enough+inventory.");
   const orderLines = lines.filter((line): line is NonNullable<typeof line> => line !== null);
@@ -75,7 +76,7 @@ export async function beginProductCheckout(formData: FormData) {
 
   const { data: order, error: orderError } = await supabase.from("orders").insert({ account_id: user.sub, subtotal_cents: subtotalCents }).select("id").single();
   if (orderError || !order) redirect(`/cart?error=${encodeURIComponent(orderError?.message ?? "Unable to save your order.")}`);
-  const { error: linesError } = await supabase.from("order_items").insert(orderLines.map((item) => ({ order_id: order.id, catalog_item_id: item.id, title: item.title, item_type: "product", unit_amount_cents: item.price_cents, quantity: item.quantity })));
+  const { error: linesError } = await supabase.from("order_items").insert(orderLines.map((item) => ({ order_id: order.id, catalog_item_id: item.id, title: item.title, item_type: item.item_type, unit_amount_cents: item.price_cents, quantity: item.quantity })));
   if (linesError) redirect(`/cart?error=${encodeURIComponent(linesError.message)}`);
 
   const origin = (await headers()).get("origin");
@@ -85,7 +86,7 @@ export async function beginProductCheckout(formData: FormData) {
       mode: "payment",
       customer_email: user.email,
       client_reference_id: order.id,
-      metadata: { order_id: order.id, account_id: user.sub, order_type: "product" },
+      metadata: { order_id: order.id, account_id: user.sub, order_type: "commerce" },
       line_items: orderLines.map((item) => ({ price_data: { currency: "usd", product_data: { name: item.title, description: item.short_description ?? undefined }, unit_amount: item.price_cents }, quantity: item.quantity })),
       success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/cart?message=Checkout+was+cancelled.+Your+cart+is+still+available.`,

@@ -2,8 +2,14 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CartLink } from "@/components/cart";
+import { createClient } from "@/lib/supabase/server";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims;
+  const displayName = typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name.split(" ")[0] : user?.email?.split("@")[0];
+  const { data: staffRole } = user ? await supabase.from("staff_roles").select("role").eq("user_id", user.sub).maybeSingle() : { data: null };
   return (
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Allens Lane Art Center home">
@@ -24,7 +30,7 @@ export function SiteHeader() {
         <Link href="/memberships">Membership</Link>
         <Link href="/donate">Donate</Link>
       </nav>
-      <div className="header-actions"><CartLink /><Link className="account-link" href="/login">Sign in</Link></div>
+      <div className="header-actions"><CartLink />{user ? <div className="profile-menu"><Link className="account-link" href="/account">{displayName ? `Hi, ${displayName}` : "My account"}</Link>{staffRole ? <Link className="profile-admin-link" href="/admin">Admin</Link> : null}</div> : <Link className="account-link" href="/login">Sign in</Link>}</div>
     </header>
   );
 }
