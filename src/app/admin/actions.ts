@@ -215,6 +215,16 @@ export async function createEvent(formData: FormData) {
   revalidatePath("/events"); revalidatePath("/admin"); redirect("/admin/events?message=Event+created");
 }
 
+export async function checkInTicket(formData: FormData) {
+  const ticketId = text(formData, "ticketId");
+  const supabase = await requireStaff("/admin/check-in");
+  if (!ticketId) redirect("/admin/check-in");
+  const { data: claims } = await supabase.auth.getClaims();
+  const { error } = await supabase.from("tickets").update({ status: "checked_in", checked_in_at: new Date().toISOString(), checked_in_by: claims?.claims?.sub }).eq("id", ticketId).eq("status", "issued");
+  if (error) redirect(`/admin/check-in?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin/check-in"); redirect("/admin/check-in?message=Ticket+checked+in");
+}
+
 async function replaceClassCategories(supabase: Awaited<ReturnType<typeof createClient>>, itemId: string, formData: FormData) {
   const selectedIds = [text(formData, "programCategory"), text(formData, "mediumCategory")].filter(Boolean);
   if (selectedIds.length !== 2) return "Choose one program category and one medium category.";
