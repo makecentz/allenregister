@@ -13,6 +13,7 @@ export async function startRegistration(formData: FormData) {
   const lastName = value(formData, "lastName");
   const birthDate = value(formData, "birthDate") || null;
   const existingParticipantId = value(formData, "participantId");
+  const next = value(formData, "next");
   if (!catalogItemId || (!existingParticipantId && (!firstName || !lastName))) redirect(`/register/${catalogItemId}?error=Choose+a+saved+participant+or+complete+the+participant+details.`);
 
   const supabase = await createClient();
@@ -30,5 +31,5 @@ export async function startRegistration(formData: FormData) {
 
   const { error } = await supabase.from("registrations").insert({ account_id: user.sub, catalog_item_id: item.id, participant_id: participant.id, price_cents: item.price_cents, status: "draft" });
   if (error) redirect(`/register/${catalogItemId}?error=${encodeURIComponent(error.code === "23505" ? "This participant already has a registration for this offering." : error.message)}`);
-  redirect("/account?message=Registration+saved.+Payment+will+be+available+at+checkout+in+the+next+phase.");
+  redirect(`${next === "/checkout" ? "/checkout" : "/account"}?message=Registration+saved.+Choose+payment+from+your+account.`);
 }
