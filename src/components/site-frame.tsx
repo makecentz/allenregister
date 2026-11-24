@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CartLink } from "@/components/cart";
@@ -6,8 +7,13 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Allens Lane Art Center home">
-        <span className="brand-mark">◌</span>
-        <span>ALLENS<br />LANE<br />ART CENTER</span>
+        <Image
+          src="/allens-lane-art-center-logo.png"
+          alt="Allens Lane Art Center"
+          width={475}
+          height={295}
+          priority
+        />
       </Link>
       <nav aria-label="Main navigation">
         <Link href="/classes">Classes</Link>
