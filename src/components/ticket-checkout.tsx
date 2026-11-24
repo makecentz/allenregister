@@ -1,0 +1,5 @@
+"use client";
+import Link from "next/link";
+import { beginTicketCheckout } from "@/app/checkout/actions";
+type Tier = { id: string; name: string; price_cents: number; capacity: number | null };
+export function TicketCheckout({ sessionId, tiers, signedIn, next }: { sessionId: string; tiers: Tier[]; signedIn: boolean; next: string }) { if (!tiers.length) return null; if (!signedIn) return <Link className="button button-primary" href={`/signup?next=${encodeURIComponent(next)}`}>Sign in to get tickets</Link>; return <form action={beginTicketCheckout} className="ticket-form"><input name="eventSessionId" type="hidden" value={sessionId} /><label>Ticket type<select name="ticketTypeId">{tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name} · {tier.price_cents === 0 ? "Free" : `$${(tier.price_cents / 100).toFixed(2)}`}</option>)}</select></label><label>Quantity<select defaultValue="1" name="quantity">{Array.from({ length: 10 }, (_, index) => <option key={index + 1}>{index + 1}</option>)}</select></label><button className="button button-primary">Get tickets</button></form>; }

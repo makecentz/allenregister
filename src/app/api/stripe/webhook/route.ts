@@ -27,6 +27,10 @@ export async function POST(request: Request) {
         if (error || !["paid", "already_processed", "inventory_issue"].includes(String(data))) return new NextResponse("Unable to complete product order", { status: 500 });
       } catch { return new NextResponse("Unable to complete product order", { status: 500 }); }
     }
+    const ticketOrderId = session.metadata?.ticket_order_id;
+    if (ticketOrderId && session.payment_status === "paid") {
+      try { const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null; const { data, error } = await createAdminClient().rpc("complete_ticket_order_payment", { checkout_order_id: ticketOrderId, checkout_session_id: session.id, payment_intent_id: paymentIntentId }); if (error || !["paid", "already_processed", "inventory_issue"].includes(String(data))) return new NextResponse("Unable to issue tickets", { status: 500 }); } catch { return new NextResponse("Unable to issue tickets", { status: 500 }); }
+    }
   }
   return NextResponse.json({ received: true });
 }

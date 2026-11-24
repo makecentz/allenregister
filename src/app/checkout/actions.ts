@@ -96,3 +96,20 @@ export async function beginProductCheckout(formData: FormData) {
     redirect("/cart?error=Unable+to+start+Stripe+Checkout.+Please+try+again.");
   }
 }
+
+export async function beginTicketCheckout(formData: FormData) {
+  const sessionId = String(formData.get("eventSessionId") ?? "");
+  const ticketTypeId = String(formData.get("ticketTypeId") ?? "");
+  const quantity = Number(formData.get("quantity") ?? "0");
+  if (!sessionId || !ticketTypeId || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) redirect("/events?error=Please+choose+a+valid+ticket+quantity.");
+  const supabase = await createClient(); const { data: claimsData } = await supabase.auth.getClaims(); const user = claimsData?.claims;
+  if (!user) redirect("/login?next=/events");
+  const { data: ticketType } = await supabase.from("ticket_types").select("id,name,description,price_cents,capacity,event_session_id,catalog_sessions!inner(catalog_items!inner(status,item_type))").eq("id", ticketTypeId).eq("event_session_id", sessionId).eq("is_active", true).maybeSingle();
+  if (!ticketType || ticketType.capacity !== null && ticketType.capacity < quantity) redirect("/events?error=That+ticket+type+is+no+longer+available.");
+  const { data: order, error: orderError } = await supabase.from("ticket_orders").insert({ account_id: user.sub, event_session_id: sessionId, total_cents: ticketType.price_cents * quantity }).select("id").single();
+  if (orderError || !order) redirect(`/events?error=${encodeURIComponent(orderError?.message ?? "Unable to start ticket order.")}`);
+  const { error: ticketsError } = await supabase.from("tickets").insert(Array.from({ length: quantity }, () => ({ ticket_order_id: order.id, ticket_type_id: ticketType.id })));
+  if (ticketsError) redirect(`/events?error=${encodeURIComponent(ticketsError.message)}`);
+  const origin = (await headers()).get("origin"); if (!origin) redirect("/events?error=Unable+to+start+checkout.");
+  try { const session = await getStripe().checkout.sessions.create({ mode: "payment", customer_email: user.email, client_reference_id: order.id, metadata: { ticket_order_id: order.id, account_id: user.sub, order_type: "ticket" }, line_items: [{ price_data: { currency: "usd", product_data: { name: ticketType.name, description: ticketType.description ?? undefined }, unit_amount: ticketType.price_cents }, quantity }], success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${origin}/events?message=Ticket+checkout+was+cancelled.` }); if (!session.url) redirect("/events?error=Stripe+did+not+return+a+checkout+URL."); redirect(session.url); } catch { redirect("/events?error=Unable+to+start+Stripe+Checkout.+Please+try+again."); }
+}
