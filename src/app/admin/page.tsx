@@ -255,6 +255,10 @@ export default async function AdminPage() {
           <strong>Check-in</strong>
           <span>Scan or enter ticket codes</span>
         </Link>
+        <Link href="/admin/attendance">
+          <strong>Attendance</strong>
+          <span>Track class and camp participation</span>
+        </Link>
         <Link href="/admin/reports">
           <strong>Reports</strong>
           <span>Export rosters and review activity</span>
