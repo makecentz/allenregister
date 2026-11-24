@@ -245,6 +245,21 @@ export async function checkInTicket(formData: FormData) {
   revalidatePath("/admin/check-in"); redirect("/admin/check-in?message=Ticket+checked+in");
 }
 
+export async function checkInTicketByCode(formData: FormData) {
+  const ticketCode = text(formData, "ticketCode").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const supabase = await requireStaff("/admin/check-in");
+  if (!ticketCode) redirect("/admin/check-in?error=Enter+a+ticket+code.");
+  const { data: ticket, error: lookupError } = await supabase.from("tickets").select("id,status").eq("ticket_code", ticketCode).maybeSingle();
+  if (lookupError || !ticket) redirect("/admin/check-in?error=Ticket+not+found.");
+  if (ticket.status === "checked_in") redirect("/admin/check-in?error=This+ticket+has+already+been+checked+in.");
+  if (ticket.status !== "issued") redirect("/admin/check-in?error=This+ticket+is+not+valid+for+check-in.");
+  const { data: claims } = await supabase.auth.getClaims();
+  const { error } = await supabase.from("tickets").update({ status: "checked_in", checked_in_at: new Date().toISOString(), checked_in_by: claims?.claims?.sub }).eq("id", ticket.id).eq("status", "issued");
+  if (error) redirect(`/admin/check-in?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin/check-in");
+  redirect("/admin/check-in?message=Ticket+checked+in");
+}
+
 async function replaceClassCategories(supabase: Awaited<ReturnType<typeof createClient>>, itemId: string, formData: FormData) {
   const selectedIds = [text(formData, "programCategory"), text(formData, "mediumCategory")].filter(Boolean);
   if (selectedIds.length !== 2) return "Choose one program category and one medium category.";
