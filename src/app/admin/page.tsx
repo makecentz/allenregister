@@ -267,6 +267,10 @@ export default async function AdminPage() {
           <strong>Memberships</strong>
           <span>Manage plans and paid members</span>
         </Link>
+        <Link href="/admin/customers">
+          <strong>Customers</strong>
+          <span>Review household activity and purchases</span>
+        </Link>
         <Link href="/admin/instructors">
           <strong>Instructors</strong>
           <span>Manage public teaching profiles</span>

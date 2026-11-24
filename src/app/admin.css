@@ -2,6 +2,7 @@
 .fund-head,.fund-row{grid-template-columns:1fr 2fr 1fr}.fund-list{border-top:1px solid #d9cec5;margin-top:2rem}.fund-list p:not(.eyebrow){line-height:1.45}.fund-list span{font-size:.92rem}@media(max-width:720px){.fund-row{grid-template-columns:1fr}.fund-row strong{grid-column:auto}}
 .product-table .admin-table-head,.product-table .admin-table-row{grid-template-columns:2fr 1fr 1fr 1fr 1fr auto}
 .membership-table .admin-table-head,.membership-table .admin-table-row{grid-template-columns:2fr 1fr 1fr 1fr}
+.customer-table .admin-table-head,.customer-table .admin-table-row{grid-template-columns:2fr 1fr 1fr 1fr 1fr}
 @media(max-width:720px){.product-table .admin-table-row{grid-template-columns:1fr 1fr}.product-table .admin-table-row strong{grid-column:1/-1}}
 .ticket-code-form{align-items:end;background:var(--cream);display:flex;flex-wrap:wrap;gap:1rem;margin-top:2rem;padding:1.25rem}.ticket-code-form label{flex:1;min-width:min(100%,260px)}.ticket-code-form .button{flex:0 0 auto}@media(max-width:720px){.ticket-code-form{align-items:stretch;flex-direction:column}.ticket-code-form .button{align-self:flex-start}}
 .admin-page-intro{font-size:1.05rem;line-height:1.5;max-width:720px}.ticket-order-table .admin-table-head,.ticket-order-table .admin-table-row{grid-template-columns:2fr repeat(5,1fr)}@media(max-width:720px){.ticket-order-table .admin-table-row{grid-template-columns:1fr 1fr}.ticket-order-table .admin-table-row strong{grid-column:1/-1}}
