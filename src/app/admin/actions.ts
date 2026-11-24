@@ -189,6 +189,32 @@ export async function updateProduct(formData: FormData) {
   revalidatePath("/shop"); revalidatePath("/admin"); redirect("/admin/products?message=Product+updated");
 }
 
+function eventPayload(formData: FormData, existingMetadata: Record<string, unknown> = {}) {
+  const title = text(formData, "title");
+  const status = text(formData, "status");
+  const startsAt = text(formData, "startsAt");
+  const endsAt = text(formData, "endsAt");
+  const capacityText = text(formData, "capacity");
+  const capacity = capacityText ? Number(capacityText) : null;
+  if (!title || !["draft", "published", "archived"].includes(status) || !startsAt || !endsAt || new Date(endsAt) <= new Date(startsAt) || (capacity !== null && (!Number.isInteger(capacity) || capacity < 1))) return null;
+  const tiers = text(formData, "ticketTiers").split("\n").map((line, index) => { const [name, price, tierCapacity] = line.split("|").map((value) => value.trim()); const priceCents = moneyToCents(price); const parsedCapacity = tierCapacity ? Number(tierCapacity) : null; return { name, priceCents, capacity: parsedCapacity, sort_order: index }; }).filter((tier) => tier.name || tier.priceCents !== 0 || tier.capacity !== null);
+  if (!tiers.length || tiers.some((tier) => !tier.name || tier.priceCents === null || (tier.capacity !== null && (!Number.isInteger(tier.capacity) || tier.capacity < 1)))) return null;
+  return { item: { title, status, short_description: text(formData, "summary") || null, description: text(formData, "description") || null, audience: text(formData, "eventType") || "Event", starts_on: startsAt.slice(0, 10), ends_on: endsAt.slice(0, 10), location: text(formData, "location") || null, capacity, price_cents: Math.min(...tiers.map((tier) => tier.priceCents ?? 0)), requires_registration: false, published_at: status === "published" ? new Date().toISOString() : null, metadata: { ...existingMetadata, presenter: text(formData, "presenter") || null } }, session: { starts_at: new Date(startsAt).toISOString(), ends_at: new Date(endsAt).toISOString(), capacity, location: text(formData, "location") || null }, tiers };
+}
+
+export async function createEvent(formData: FormData) {
+  const supabase = await requireStaff("/admin/events/new");
+  const payload = eventPayload(formData);
+  if (!payload) redirect("/admin/events/new?error=Please+complete+the+event,+session,+and+at+least+one+valid+ticket+tier.");
+  const { data: event, error } = await supabase.from("catalog_items").insert({ ...payload.item, item_type: "event", slug: `${slugify(payload.item.title)}-${Date.now().toString(36)}` }).select("id").single();
+  if (error || !event) redirect(`/admin/events/new?error=${encodeURIComponent(error?.message ?? "Unable to save event.")}`);
+  const { data: session, error: sessionError } = await supabase.from("catalog_sessions").insert({ ...payload.session, catalog_item_id: event.id }).select("id").single();
+  if (sessionError || !session) redirect(`/admin/events/${event.id}?error=${encodeURIComponent(sessionError?.message ?? "Unable to save session.")}`);
+  const { error: tierError } = await supabase.from("ticket_types").insert(payload.tiers.map((tier) => ({ ...tier, event_session_id: session.id })));
+  if (tierError) redirect(`/admin/events/${event.id}?error=${encodeURIComponent(tierError.message)}`);
+  revalidatePath("/events"); revalidatePath("/admin"); redirect("/admin/events?message=Event+created");
+}
+
 async function replaceClassCategories(supabase: Awaited<ReturnType<typeof createClient>>, itemId: string, formData: FormData) {
   const selectedIds = [text(formData, "programCategory"), text(formData, "mediumCategory")].filter(Boolean);
   if (selectedIds.length !== 2) return "Choose one program category and one medium category.";

@@ -1,28 +1,15 @@
 import Link from "next/link";
 import { SiteFrame } from "@/components/site-frame";
-import { formatPrice, getPublishedCatalogItems } from "@/lib/catalog";
+import { getPublicEvents } from "@/lib/events";
 
 export const instant = false;
 
-const events = [
-  { month: "DEC", day: "12", type: "Performance", title: "A Very Pretzel Holiday Cabaret", detail: "Saturday, December 12 · 7:00 PM · Allens Lane Theater", price: "From $20" },
-  { month: "DEC", day: "13", type: "Performance", title: "A Very Pretzel Holiday Cabaret", detail: "Sunday, December 13 · 2:00 PM · Allens Lane Theater", price: "From $20" },
-  { month: "JAN", day: "09", type: "Community", title: "First Friday: Art Is Magic", detail: "Friday, January 9 · 6:00 PM · Main Gallery", price: "Free" },
-  { month: "JAN", day: "24", type: "Workshop", title: "Family Clay Day", detail: "Saturday, January 24 · 1:00 PM · Ceramics Studio", price: "$15" },
-] as const;
+const dateParts = (value?: string) => value ? { month: new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(value)).toUpperCase(), day: String(new Date(value).getDate()) } : { month: "TBD", day: "—" };
 
 export default async function EventsPage() {
-  const publishedEvents = await getPublishedCatalogItems("event");
-  const items = publishedEvents.length ? publishedEvents.map((item) => {
-    const date = item.starts_on ? new Date(`${item.starts_on}T12:00:00`) : null;
-    return { month: date ? new Intl.DateTimeFormat("en-US", { month: "short" }).format(date).toUpperCase() : "TBD", day: date ? String(date.getDate()) : "—", type: item.audience ?? "Event", title: item.title, detail: [item.starts_on, item.location].filter(Boolean).join(" · ") || item.short_description || "Details coming soon", price: formatPrice(item.price_cents) };
-  }) : events;
+  const events = await getPublicEvents();
   return <SiteFrame><main className="catalog-page">
     <section className="catalog-intro"><p className="eyebrow">Live at the Lane</p><h1>Events & performances.</h1><p>Gather for theatre, music, exhibitions, workshops, and joyful community moments.</p></section>
-    <section className="event-list" aria-label="Upcoming events">{items.map((event) => <article className="event-row" key={`${event.month}-${event.day}-${event.detail}`}>
-      <div className="event-date"><span>{event.month}</span><strong>{event.day}</strong></div>
-      <div className="event-details"><p className="eyebrow">{event.type}</p><h2>{event.title}</h2><p>{event.detail}</p></div>
-      <div className="event-action"><strong>{event.price}</strong><Link className="button button-primary" href="/signup?next=/events">Details</Link></div>
-    </article>)}</section>
+    {events.length ? <section className="event-list" aria-label="Upcoming events">{events.map((event) => { const session = event.sessions[0]; const date = dateParts(session?.starts_at); const price = session?.ticket_types.length ? Math.min(...session.ticket_types.map((tier) => tier.price_cents)) : null; return <article className="event-row" key={event.id}><div className="event-date"><span>{date.month}</span><strong>{date.day}</strong></div><div className="event-details"><p className="eyebrow">{event.audience ?? "Event"}</p><h2><Link href={`/events/${event.slug}`}>{event.title}</Link></h2><p>{session ? `${new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(session.starts_at))} · ${session.location ?? event.location ?? "Allens Lane Art Center"}` : event.short_description ?? "Details coming soon"}</p></div><div className="event-action"><strong>{price === null ? "Details soon" : price === 0 ? "Free" : `From $${(price / 100).toFixed(2)}`}</strong><Link className="button button-primary" href={`/events/${event.slug}`}>Details</Link></div></article>; })}</section> : <section className="camp-empty"><h2>Events are being prepared.</h2><p>Performances, workshops, and community events will appear here as they are announced.</p></section>}
   </main></SiteFrame>;
 }
