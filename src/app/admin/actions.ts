@@ -215,6 +215,26 @@ export async function createEvent(formData: FormData) {
   revalidatePath("/events"); revalidatePath("/admin"); redirect("/admin/events?message=Event+created");
 }
 
+export async function updateEvent(formData: FormData) {
+  const itemId = text(formData, "itemId");
+  if (!itemId) redirect("/admin/events");
+  const supabase = await requireStaff(`/admin/events/${itemId}`);
+  const { data: existing } = await supabase.from("catalog_items").select("metadata").eq("id", itemId).eq("item_type", "event").maybeSingle();
+  const { data: session } = await supabase.from("catalog_sessions").select("id").eq("catalog_item_id", itemId).order("starts_at").limit(1).maybeSingle();
+  if (!existing || !session) redirect("/admin/events?error=Event+session+not+found.");
+  const payload = eventPayload(formData, (existing.metadata ?? {}) as Record<string, unknown>);
+  if (!payload) redirect(`/admin/events/${itemId}?error=Please+complete+the+event,+session,+and+at+least+one+valid+ticket+tier.`);
+  const { error: eventError } = await supabase.from("catalog_items").update(payload.item).eq("id", itemId);
+  if (eventError) redirect(`/admin/events/${itemId}?error=${encodeURIComponent(eventError.message)}`);
+  const { error: sessionError } = await supabase.from("catalog_sessions").update(payload.session).eq("id", session.id);
+  if (sessionError) redirect(`/admin/events/${itemId}?error=${encodeURIComponent(sessionError.message)}`);
+  const { error: removeError } = await supabase.from("ticket_types").delete().eq("event_session_id", session.id);
+  if (removeError) redirect(`/admin/events/${itemId}?error=${encodeURIComponent(removeError.message)}`);
+  const { error: tierError } = await supabase.from("ticket_types").insert(payload.tiers.map((tier) => ({ ...tier, event_session_id: session.id })));
+  if (tierError) redirect(`/admin/events/${itemId}?error=${encodeURIComponent(tierError.message)}`);
+  revalidatePath("/events"); revalidatePath("/admin/events"); redirect("/admin/events?message=Event+updated");
+}
+
 export async function checkInTicket(formData: FormData) {
   const ticketId = text(formData, "ticketId");
   const supabase = await requireStaff("/admin/check-in");
