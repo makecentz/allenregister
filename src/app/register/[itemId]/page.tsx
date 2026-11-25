@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { startRegistration } from "@/app/register/actions";
 import { ParticipantPicker } from "@/components/participant-picker";
+import { SiteFrame } from "@/components/site-frame";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/catalog";
 import { accountHolderName } from "@/lib/participants";
@@ -53,12 +54,13 @@ export default async function RegisterPage({
   const accountHolder = accountHolderName(profile?.full_name || userMetadataName);
 
   return (
-    <main className="registration-page">
-      <Link href={item.item_type === "camp" ? "/camp" : "/classes"}>
-        ← Back to {item.item_type === "camp" ? "summer camp" : "classes"}
-      </Link>
-      <div className="registration-layout">
-        <section className="registration-summary">
+    <SiteFrame>
+      <main className="registration-page">
+        <Link href={item.item_type === "camp" ? "/camp" : "/classes"}>
+          ← Back to {item.item_type === "camp" ? "summer camp" : "classes"}
+        </Link>
+        <div className="registration-layout">
+          <section className="registration-summary">
           <p className="eyebrow">
             {item.item_type === "camp"
               ? "Summer camp registration"
@@ -67,18 +69,19 @@ export default async function RegisterPage({
           <h1>{item.title}</h1>
           <p>{item.short_description}</p>
           <dl>
-            <dt>When</dt>
-            <dd>
-              {[item.starts_on, item.ends_on].filter(Boolean).join(" – ") ||
-                "Dates to be announced"}
-            </dd>
+            {item.starts_on || item.ends_on ? (
+              <>
+                <dt>When</dt>
+                <dd>{[item.starts_on, item.ends_on].filter(Boolean).join(" – ")}</dd>
+              </>
+            ) : null}
             <dt>Where</dt>
             <dd>{item.location ?? "Allens Lane Art Center"}</dd>
             <dt>Tuition</dt>
             <dd>{formatPrice(item.price_cents)}</dd>
           </dl>
-        </section>
-        <section className="registration-form">
+          </section>
+          <section className="registration-form">
           <p className="eyebrow">
             {waitlistEntry ? "Your waitlist offer" : "Step 1 of 2"}
           </p>
@@ -130,8 +133,9 @@ export default async function RegisterPage({
             ) : null}
             <button className="button button-primary">Save registration</button>
           </form>
-        </section>
-      </div>
-    </main>
+          </section>
+        </div>
+      </main>
+    </SiteFrame>
   );
 }
