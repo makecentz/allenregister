@@ -35,6 +35,21 @@ async function requireStaff(next: string) {
   return supabase;
 }
 
+async function requireAdministrator(next: string) {
+  const supabase = await createClient();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims;
+  if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
+  const { data: role } = await supabase
+    .from("staff_roles")
+    .select("role")
+    .eq("user_id", user.sub)
+    .maybeSingle();
+  if (role?.role !== "admin")
+    redirect("/admin?error=Administrator+access+is+required.");
+  return { supabase, userId: user.sub };
+}
+
 function moneyToCents(value: string) {
   const cents = Math.round(Number(value || "0") * 100);
   return Number.isFinite(cents) && cents >= 0 ? cents : null;
@@ -931,4 +946,45 @@ export async function sendProgramEmail(formData: FormData) {
   redirect(
     `/admin/communications?message=${encodeURIComponent(`Email accepted for delivery to ${recipientCount} household${recipientCount === 1 ? "" : "s"}.`)}`,
   );
+}
+
+export async function assignStaffRole(formData: FormData) {
+  const email = text(formData, "email").toLowerCase();
+  const role = text(formData, "role");
+  if (!email || !["admin", "staff"].includes(role))
+    redirect("/admin/staff?error=Enter+an+email+and+valid+role.");
+  await requireAdministrator("/admin/staff");
+  const admin = createAdminClient();
+  const { data: userList, error: userError } = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const user = userList?.users.find(
+    (candidate) => candidate.email?.trim().toLowerCase() === email,
+  );
+  if (userError || !user)
+    redirect("/admin/staff?error=That+email+does+not+belong+to+an+existing+account.");
+  const { error } = await admin
+    .from("staff_roles")
+    .upsert({ user_id: user.id, role });
+  if (error) redirect(`/admin/staff?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/staff");
+  redirect("/admin/staff?message=Staff+access+saved");
+}
+
+export async function revokeStaffRole(formData: FormData) {
+  const userId = text(formData, "userId");
+  if (!userId) redirect("/admin/staff?error=Staff+account+not+found.");
+  const { userId: currentUserId } = await requireAdministrator("/admin/staff");
+  if (userId === currentUserId)
+    redirect("/admin/staff?error=You+cannot+remove+your+own+administrator+access.");
+  const { error } = await createAdminClient()
+    .from("staff_roles")
+    .delete()
+    .eq("user_id", userId);
+  if (error) redirect(`/admin/staff?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/staff");
+  redirect("/admin/staff?message=Staff+access+removed");
 }

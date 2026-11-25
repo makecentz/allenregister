@@ -333,6 +333,12 @@ export default async function AdminPage() {
           <strong>Email students</strong>
           <span>Send updates to confirmed households</span>
         </Link>
+        {role.role === "admin" ? (
+          <Link href="/admin/staff">
+            <strong>Staff access</strong>
+            <span>Assign administrator and staff roles</span>
+          </Link>
+        ) : null}
         <Link href="/admin/reports">
           <strong>Reports</strong>
           <span>Export rosters and review activity</span>
