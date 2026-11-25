@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { beginRegistrationCheckout } from "@/app/checkout/actions";
 import { SiteFrame } from "@/components/site-frame";
 import { saveParticipant, saveProfile } from "@/app/account/actions";
 import { withdrawFromWaitlist } from "@/app/waitlist/actions";
+import { isMembershipActive } from "@/lib/membership-status";
 
 export const instant = false;
 
@@ -14,6 +16,7 @@ export default async function AccountPage({
   searchParams: Promise<{ message?: string; error?: string }>;
 }) {
   const { message, error } = await searchParams;
+  await connection();
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims;
@@ -54,6 +57,11 @@ export default async function AccountPage({
     )
     .eq("account_id", user.sub)
     .order("created_at", { ascending: false });
+  const { data: membershipRecords } = await supabase
+    .from("memberships")
+    .select("id,status,starts_at,expires_at,catalog_items(title)")
+    .eq("account_id", user.sub)
+    .order("expires_at", { ascending: false });
   const { data: tickets } = await supabase
     .from("tickets")
     .select(
@@ -85,15 +93,11 @@ export default async function AccountPage({
     .eq("account_id", user.sub)
     .in("status", ["waiting", "offered"])
     .order("created_at", { ascending: true });
-  const memberships =
-    orders?.flatMap((order) =>
-      order.status === "paid"
-        ? ((
-            order.order_items as
-              { title: string; quantity: number; item_type: string }[] | null
-          )?.filter((item) => item.item_type === "membership") ?? [])
-        : [],
-    ) ?? [];
+  const memberships = (membershipRecords ?? []).map((membership) => ({
+    ...membership,
+    isActive: isMembershipActive(membership.status, membership.expires_at),
+  }));
+  const activeMemberships = memberships.filter((membership) => membership.isActive);
   return (
     <SiteFrame>
       <main className="account-page">
@@ -179,8 +183,14 @@ export default async function AccountPage({
               <dd>{user.email}</dd>
               <dt>Membership</dt>
               <dd>
-                {memberships.length
-                  ? memberships.map((membership) => membership.title).join(", ")
+                {activeMemberships.length
+                  ? activeMemberships
+                      .map(
+                        (membership) =>
+                          (membership.catalog_items as { title?: string } | null)
+                            ?.title ?? "Allens Lane membership",
+                      )
+                      .join(", ")
                   : "Not yet enrolled"}
               </dd>
             </dl>
@@ -197,7 +207,7 @@ export default async function AccountPage({
               <button className="button">Save profile</button>
             </form>
             <Link href="/memberships">
-              {memberships.length
+              {activeMemberships.length
                 ? "Explore another membership"
                 : "Explore memberships"}
             </Link>
@@ -258,6 +268,36 @@ export default async function AccountPage({
             </label>
             <button className="button button-primary">Add participant</button>
           </form>
+        </section>
+        <section className="account-purchases">
+          <p className="eyebrow">Membership</p>
+          <h2>Your membership</h2>
+          {memberships.length ? (
+            <div className="registration-list">
+              {memberships.map((membership) => {
+                const plan = membership.catalog_items as {
+                  title?: string;
+                } | null;
+                return (
+                  <div className="registration-entry" key={membership.id}>
+                    <strong>{plan?.title ?? "Allens Lane membership"}</strong>
+                    <br />
+                    <span className="registration-status">
+                      {membership.isActive ? "active" : "expired"} · ends{" "}
+                      {new Intl.DateTimeFormat("en-US", {
+                        dateStyle: "medium",
+                      }).format(new Date(membership.expires_at))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p>
+              Your membership status will appear here after a membership
+              purchase.
+            </p>
+          )}
         </section>
         <section className="account-purchases">
           <p className="eyebrow">Waitlists</p>

@@ -132,12 +132,21 @@ export async function POST(request: Request) {
             return new NextResponse("Unable to apply gift certificate", {
               status: 500,
             });
-          if (String(data) === "paid")
+          if (String(data) === "paid") {
+            const { error: membershipError } = await createAdminClient().rpc(
+              "activate_memberships_for_order",
+              { p_order_id: orderId },
+            );
+            if (membershipError)
+              return new NextResponse("Unable to activate membership", {
+                status: 500,
+              });
             await sendPurchaseEmail(
               session,
               "Your Allens Lane order is confirmed",
               "Thank you — your shop order has been confirmed.",
             );
+          }
         }
       } catch {
         return new NextResponse("Unable to complete product order", {

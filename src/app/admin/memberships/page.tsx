@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isMembershipActive } from "@/lib/membership-status";
 
 export const instant = false;
 
-type MembershipOrder = {
+type MembershipRecord = {
   id: string;
   account_id: string;
-  subtotal_cents: number;
+  status: string;
+  starts_at: string;
+  expires_at: string;
   created_at: string;
-  order_items: { title: string; item_type: string }[] | null;
+  catalog_items: { title?: string } | null;
 };
 
 export default async function AdminMembershipsPage() {
+  await connection();
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims;
@@ -24,23 +29,21 @@ export default async function AdminMembershipsPage() {
     .maybeSingle();
   if (!role) redirect("/admin");
 
-  const [{ data: plans }, { data: paidOrders }] = await Promise.all([
+  const [{ data: plans }, { data: membershipRows }] = await Promise.all([
     supabase
       .from("catalog_items")
       .select("id,title,status,audience,price_cents")
       .eq("item_type", "membership")
       .order("created_at", { ascending: false }),
     supabase
-      .from("orders")
+      .from("memberships")
       .select(
-        "id,account_id,subtotal_cents,created_at,order_items!inner(title,item_type)",
+        "id,account_id,status,starts_at,expires_at,created_at,catalog_items(title)",
       )
-      .eq("status", "paid")
-      .eq("order_items.item_type", "membership")
-      .order("created_at", { ascending: false })
+      .order("expires_at", { ascending: false })
       .limit(100),
   ]);
-  const membershipOrders = (paidOrders ?? []) as unknown as MembershipOrder[];
+  const membershipOrders = (membershipRows ?? []) as unknown as MembershipRecord[];
   const accountIds = [
     ...new Set(membershipOrders.map((order) => order.account_id)),
   ];
@@ -53,9 +56,8 @@ export default async function AdminMembershipsPage() {
   const names = new Map(
     (profiles ?? []).map((profile) => [profile.id, profile.full_name]),
   );
-  const paidRevenue = membershipOrders.reduce(
-    (sum, order) => sum + order.subtotal_cents,
-    0,
+  const activeMemberships = membershipOrders.filter(
+    (membership) => isMembershipActive(membership.status, membership.expires_at),
   );
 
   return (
@@ -75,9 +77,8 @@ export default async function AdminMembershipsPage() {
         </div>
       </header>
       <p className="admin-page-intro">
-        Manage membership plans and review paid membership purchases. Renewal
-        and expiration automation can be added once the membership policy is
-        finalized.
+        Manage annual membership plans and review active and expired member
+        records.
       </p>
       <section className="dashboard-metrics membership-metrics">
         <article>
@@ -93,19 +94,14 @@ export default async function AdminMembershipsPage() {
           <small>Plans available on the website</small>
         </article>
         <article>
-          <span>Paid purchases</span>
-          <strong>{membershipOrders.length}</strong>
-          <small>Recorded membership orders</small>
+          <span>Active members</span>
+          <strong>{activeMemberships.length}</strong>
+          <small>Memberships within their annual term</small>
         </article>
         <article>
-          <span>Membership revenue</span>
-          <strong>
-            $
-            {(paidRevenue / 100).toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-            })}
-          </strong>
-          <small>Paid orders to date</small>
+          <span>Membership records</span>
+          <strong>{membershipOrders.length}</strong>
+          <small>Current and historical membership terms</small>
         </article>
       </section>
       <section className="report-section">
@@ -146,32 +142,38 @@ export default async function AdminMembershipsPage() {
         <div className="report-heading">
           <div>
             <p className="eyebrow">Members</p>
-            <h2>Recent paid memberships</h2>
+            <h2>Membership terms</h2>
           </div>
         </div>
         <div className="admin-table membership-table">
           <div className="admin-table-head">
             <span>Member</span>
             <span>Plan</span>
-            <span>Purchased</span>
-            <span>Amount</span>
+            <span>Term</span>
+            <span>Status</span>
           </div>
           {membershipOrders.length ? (
-            membershipOrders.map((order) => (
-              <div className="admin-table-row" key={order.id}>
+            membershipOrders.map((membership) => (
+              <div className="admin-table-row" key={membership.id}>
                 <strong>
-                  {names.get(order.account_id) || "Allens Lane member"}
+                  {names.get(membership.account_id) || "Allens Lane member"}
                 </strong>
                 <span>
-                  {order.order_items?.map((item) => item.title).join(", ") ||
-                    "Membership"}
+                  {membership.catalog_items?.title ?? "Membership"}
                 </span>
                 <span>
                   {new Intl.DateTimeFormat("en-US", {
                     dateStyle: "medium",
-                  }).format(new Date(order.created_at))}
+                  }).format(new Date(membership.starts_at))} {" – "}
+                  {new Intl.DateTimeFormat("en-US", {
+                    dateStyle: "medium",
+                  }).format(new Date(membership.expires_at))}
                 </span>
-                <span>${(order.subtotal_cents / 100).toFixed(2)}</span>
+                <span>
+                  {isMembershipActive(membership.status, membership.expires_at)
+                    ? "Active"
+                    : "Expired"}
+                </span>
               </div>
             ))
           ) : (
