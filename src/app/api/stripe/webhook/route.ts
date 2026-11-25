@@ -127,6 +127,33 @@ export async function POST(request: Request) {
         return new NextResponse("Unable to complete donation", { status: 500 });
       }
     }
+    const giftCertificateId = session.metadata?.gift_certificate_id;
+    if (giftCertificateId && session.payment_status === "paid") {
+      try {
+        const paymentIntentId =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? null);
+        const { error } = await createAdminClient()
+          .from("gift_certificates")
+          .update({
+            status: "issued",
+            stripe_checkout_session_id: session.id,
+            stripe_payment_intent_id: paymentIntentId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", giftCertificateId)
+          .eq("status", "pending_payment");
+        if (error)
+          return new NextResponse("Unable to issue gift certificate", {
+            status: 500,
+          });
+      } catch {
+        return new NextResponse("Unable to issue gift certificate", {
+          status: 500,
+        });
+      }
+    }
   }
   return NextResponse.json({ received: true });
 }
