@@ -298,6 +298,10 @@ export default async function AdminPage() {
           <strong>Shop</strong>
           <span>Manage inventory and merchandise</span>
         </Link>
+        <Link href="/admin/orders">
+          <strong>Orders</strong>
+          <span>Review shop and membership purchases</span>
+        </Link>
         <Link href="/admin/memberships">
           <strong>Memberships</strong>
           <span>Manage plans and paid members</span>
