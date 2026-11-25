@@ -115,6 +115,10 @@ export async function POST(request: Request) {
             status: "paid",
             stripe_checkout_session_id: session.id,
             stripe_payment_intent_id: paymentIntentId,
+            stripe_subscription_id:
+              typeof session.subscription === "string"
+                ? session.subscription
+                : (session.subscription?.id ?? null),
             updated_at: new Date().toISOString(),
           })
           .eq("id", donationId)

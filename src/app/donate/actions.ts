@@ -13,6 +13,7 @@ export async function beginDonationCheckout(formData: FormData) {
   const note = String(formData.get("note") ?? "")
     .trim()
     .slice(0, 500);
+  const monthly = String(formData.get("frequency") ?? "") === "monthly";
   if (!Number.isInteger(amountCents) || amountCents < 100)
     redirect("/donate?error=Please+enter+a+gift+of+at+least+$1.00.");
   const supabase = await createClient();
@@ -36,6 +37,7 @@ export async function beginDonationCheckout(formData: FormData) {
       donation_fund_id: fund?.id ?? null,
       amount_cents: amountCents,
       note: note || null,
+      frequency: monthly ? "monthly" : "one_time",
     })
     .select("id")
     .single();
@@ -47,7 +49,7 @@ export async function beginDonationCheckout(formData: FormData) {
   if (!origin) redirect("/donate?error=Unable+to+start+checkout.");
   try {
     const session = await getStripe().checkout.sessions.create({
-      mode: "payment",
+      mode: monthly ? "subscription" : "payment",
       customer_email: user.email,
       client_reference_id: donation.id,
       metadata: {
@@ -66,6 +68,7 @@ export async function beginDonationCheckout(formData: FormData) {
               description: note || undefined,
             },
             unit_amount: amountCents,
+            recurring: monthly ? { interval: "month" } : undefined,
           },
           quantity: 1,
         },

@@ -76,11 +76,14 @@ export default async function DonatePage({
                 rows={3}
               />
             </label>
+            <label className="check-label">
+              <input name="frequency" type="checkbox" value="monthly" /> Make
+              this a monthly gift
+            </label>
             <button className="button button-primary">Donate securely</button>
           </form>
           <p className="small-note">
-            One-time gifts are securely processed through Stripe. Monthly giving
-            will be added in a later phase.
+            One-time and monthly gifts are securely processed through Stripe.
           </p>
         </section>
       </main>
