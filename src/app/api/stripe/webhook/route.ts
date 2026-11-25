@@ -305,6 +305,45 @@ export async function POST(request: Request) {
         })
         .eq("stripe_payment_intent_id", paymentIntentId)
         .eq("status", "refund_pending");
+      const { data: ticketOrder } = await createAdminClient()
+        .from("ticket_orders")
+        .select("id")
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .eq("status", "refund_pending")
+        .maybeSingle();
+      if (ticketOrder) {
+        const { error } = await createAdminClient().rpc(
+          "finalize_ticket_order_refund",
+          { p_ticket_order_id: ticketOrder.id },
+        );
+        if (error)
+          return new NextResponse("Unable to finalize ticket refund", {
+            status: 500,
+          });
+      }
+    }
+    if (
+      paymentIntentId &&
+      (refund.status === "failed" || refund.status === "canceled")
+    ) {
+      const { data: ticketOrder } = await createAdminClient()
+        .from("ticket_orders")
+        .select("id")
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .eq("status", "refund_pending")
+        .maybeSingle();
+      if (ticketOrder) {
+        await createAdminClient()
+          .from("ticket_orders")
+          .update({ status: "paid", updated_at: new Date().toISOString() })
+          .eq("id", ticketOrder.id)
+          .eq("status", "refund_pending");
+        await createAdminClient()
+          .from("tickets")
+          .update({ status: "issued" })
+          .eq("ticket_order_id", ticketOrder.id)
+          .eq("status", "cancelled");
+      }
     }
   }
   return NextResponse.json({ received: true });

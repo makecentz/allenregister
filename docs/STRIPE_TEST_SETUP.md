@@ -10,6 +10,6 @@ Add these environment variables to the `allenregister` Vercel project for Develo
 Create a **test-mode** Stripe webhook destination after deployment:
 
 - Endpoint URL: `https://allenregister.vercel.app/api/stripe/webhook`
-- Event: `checkout.session.completed`
+- Events: `checkout.session.completed`, `checkout.session.expired`, and `refund.updated`
 
 Copy that destination's `whsec_...` signing secret into `STRIPE_WEBHOOK_SECRET`. The service-role key is available in the Supabase project API settings; it must remain server-only.
