@@ -1,6 +1,5 @@
 import { SiteFrame } from "@/components/site-frame";
 import { formatPrice, getPublishedCatalogItems } from "@/lib/catalog";
-import { CartAddButton } from "@/components/cart";
 import Link from "next/link";
 
 export const instant = false;
@@ -71,8 +70,8 @@ export default async function ClassesPage() {
             [metadata.schedule_text, metadata.time_text, item.location]
               .filter(Boolean)
               .join(" · ") ||
-        item.short_description ||
-        "See class details for schedule and location.",
+            item.short_description ||
+            "See class details for schedule and location.",
           price: formatPrice(item.price_cents),
           priceCents: item.price_cents,
           memberPrice,
@@ -142,29 +141,17 @@ export default async function ClassesPage() {
                     </span>
                   ) : null}
                   {item.slug ? (
-                    <Link className="text-link" href={`/classes/${item.slug}`}>
-                      Details →
+                    <Link
+                      className="button button-primary"
+                      href={`/classes/${item.slug}`}
+                    >
+                      {item.availability === "waitlist"
+                        ? "Join waitlist"
+                        : item.availability === "info"
+                          ? "Contact us"
+                          : "See more"}
                     </Link>
                   ) : null}
-                  {item.availability === "waitlist" ? (
-                    <span className="class-waitlist">Waitlist only</span>
-                  ) : item.availability === "info" ? (
-                    <span className="class-waitlist">Contact us</span>
-                  ) : (
-                    <CartAddButton
-                      item={
-                        item.id
-                          ? {
-                              id: item.id,
-                              title: item.title,
-                              itemType: "class",
-                              priceCents: item.priceCents,
-                            }
-                          : null
-                      }
-                      label="Add class"
-                    />
-                  )}
                 </div>
               </div>
             </article>
