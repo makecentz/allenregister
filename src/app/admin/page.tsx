@@ -290,6 +290,10 @@ export default async function AdminPage() {
           <strong>Attendance</strong>
           <span>Track class and camp participation</span>
         </Link>
+        <Link href="/admin/waitlist">
+          <strong>Waitlists</strong>
+          <span>Offer and manage program spaces</span>
+        </Link>
         <Link href="/admin/reports">
           <strong>Reports</strong>
           <span>Export rosters and review activity</span>

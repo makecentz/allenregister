@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  refundCommerceOrder,
+  updateOrderFulfillment,
+} from "@/app/admin/order-actions";
 
 export const instant = false;
 
@@ -8,13 +12,21 @@ type CommerceOrder = {
   id: string;
   account_id: string;
   status: string;
+  fulfillment_status: string;
+  fulfillment_note: string | null;
+  tracking_number: string | null;
   subtotal_cents: number;
   created_at: string;
   order_items:
     { title?: string; quantity?: number; item_type?: string }[] | null;
 };
 
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ message?: string; error?: string }>;
+}) {
+  const { message, error } = await searchParams;
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const user = claims?.claims;
@@ -28,7 +40,7 @@ export default async function AdminOrdersPage() {
   const { data: orders } = await supabase
     .from("orders")
     .select(
-      "id,account_id,status,subtotal_cents,created_at,order_items(title,quantity,item_type)",
+      "id,account_id,status,fulfillment_status,fulfillment_note,tracking_number,subtotal_cents,created_at,order_items(title,quantity,item_type)",
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -70,10 +82,11 @@ export default async function AdminOrdersPage() {
         </div>
       </header>
       <p className="admin-page-intro">
-        Review paid shop and membership orders for fulfillment and customer
-        service. Refunds are kept in Stripe until Allens Lane’s refund policy is
-        approved.
+        Review paid shop and membership orders, record fulfillment progress, and
+        issue full refunds through Stripe when needed.
       </p>
+      {message ? <p className="success-message">{message}</p> : null}
+      {error ? <p className="form-error">{error}</p> : null}
       <section className="report-grid">
         <article>
           <span>Paid orders</span>
@@ -103,7 +116,8 @@ export default async function AdminOrdersPage() {
           <span>Items</span>
           <span>Purchased</span>
           <span>Amount</span>
-          <span>Status</span>
+          <span>Payment</span>
+          <span>Fulfillment</span>
         </div>
         {orderRows.length ? (
           orderRows.map((order) => (
@@ -129,6 +143,44 @@ export default async function AdminOrdersPage() {
                   className={`status-dot ${order.status === "paid" ? "published" : "draft"}`}
                 />
                 {order.status.replace("_", " ")}
+              </span>
+              <span className="order-operation">
+                {order.status === "paid" ? (
+                  <form action={updateOrderFulfillment}>
+                    <input name="orderId" type="hidden" value={order.id} />
+                    <select
+                      defaultValue={order.fulfillment_status}
+                      name="fulfillmentStatus"
+                    >
+                      <option value="unfulfilled">Unfulfilled</option>
+                      <option value="processing">Processing</option>
+                      <option value="ready_for_pickup">Ready for pickup</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <input
+                      defaultValue={order.tracking_number ?? ""}
+                      name="trackingNumber"
+                      placeholder="Tracking number"
+                    />
+                    <input
+                      defaultValue={order.fulfillment_note ?? ""}
+                      name="fulfillmentNote"
+                      placeholder="Internal note"
+                    />
+                    <button className="button">Save</button>
+                  </form>
+                ) : (
+                  <span>{order.fulfillment_status.replaceAll("_", " ")}</span>
+                )}
+                {order.status === "paid" ? (
+                  <form action={refundCommerceOrder}>
+                    <input name="orderId" type="hidden" value={order.id} />
+                    <button className="button order-refund">
+                      Refund order
+                    </button>
+                  </form>
+                ) : null}
               </span>
             </div>
           ))

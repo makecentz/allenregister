@@ -12,3 +12,4 @@
 .ticket-tier{border-top:1px solid #ded6cf;padding:1rem 0}.ticket-tier strong{display:block;font-size:1.15rem}.ticket-tier p{font-size:.9rem;line-height:1.4;margin:.4rem 0}.ticket-tier span{color:var(--red);font-size:1.35rem;font-weight:900}
 .ticket-form{background:var(--cream);margin:1rem 0;padding:1rem}.ticket-form select{background:#fff;border:1px solid #a99f96;font:inherit;padding:.7rem}.ticket-form .button{justify-self:start}
 .cart-add-action{display:grid;gap:.7rem;justify-items:start}.cart-add-confirmation{font-size:.9rem;line-height:1.4;margin:0}.cart-add-confirmation a{font-weight:900;text-decoration:underline}
+.gift-code-field{display:grid;font-size:.82rem;font-weight:800;gap:.35rem;margin:1rem 0}.gift-code-field span{font-weight:500}.gift-code-field input{background:#fff;border:1px solid #a99f96;font:inherit;max-width:100%;padding:.65rem;width:100%}

@@ -239,6 +239,14 @@ export function CartContents({
                           type="hidden"
                           value={registration.id}
                         />
+                        <label className="gift-code-field">
+                          Gift certificate code <span>(optional)</span>
+                          <input
+                            autoCapitalize="characters"
+                            name="giftCertificateCode"
+                            placeholder="ALAC-XXXX"
+                          />
+                        </label>
                         <button className="button">
                           Pay registration: {item.title}
                         </button>
@@ -269,6 +277,14 @@ export function CartContents({
               type="hidden"
               value={JSON.stringify(purchasableItems)}
             />
+            <label className="gift-code-field">
+              Gift certificate code <span>(optional)</span>
+              <input
+                autoCapitalize="characters"
+                name="giftCertificateCode"
+                placeholder="ALAC-XXXX"
+              />
+            </label>
             <button className="button button-primary">Pay securely</button>
           </form>
         ) : signedIn && !experienceItems.length ? (

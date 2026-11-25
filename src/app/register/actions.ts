@@ -14,22 +14,78 @@ export async function startRegistration(formData: FormData) {
   const birthDate = value(formData, "birthDate") || null;
   const existingParticipantId = value(formData, "participantId");
   const next = value(formData, "next");
-  if (!catalogItemId || (!existingParticipantId && (!firstName || !lastName))) redirect(`/register/${catalogItemId}?error=Choose+a+saved+participant+or+complete+the+participant+details.`);
+  const waitlistEntryId = value(formData, "waitlistEntryId");
+  if (!catalogItemId || (!existingParticipantId && (!firstName || !lastName)))
+    redirect(
+      `/register/${catalogItemId}?error=Choose+a+saved+participant+or+complete+the+participant+details.`,
+    );
 
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims;
   if (!user) redirect(`/signup?next=/register/${catalogItemId}`);
 
-  const { data: item } = await supabase.from("catalog_items").select("id,price_cents").eq("id", catalogItemId).eq("status", "published").in("item_type", ["class", "camp"]).maybeSingle();
+  const { data: item } = await supabase
+    .from("catalog_items")
+    .select("id,price_cents")
+    .eq("id", catalogItemId)
+    .eq("status", "published")
+    .in("item_type", ["class", "camp"])
+    .maybeSingle();
   if (!item) redirect("/classes");
 
   const { data: participant, error: participantError } = existingParticipantId
-    ? await supabase.from("participants").select("id").eq("id", existingParticipantId).eq("account_id", user.sub).maybeSingle()
-    : await supabase.from("participants").insert({ account_id: user.sub, first_name: firstName, last_name: lastName, birth_date: birthDate }).select("id").single();
-  if (participantError || !participant) redirect(`/register/${catalogItemId}?error=${encodeURIComponent(participantError?.message ?? "Unable to save participant details.")}`);
+    ? await supabase
+        .from("participants")
+        .select("id")
+        .eq("id", existingParticipantId)
+        .eq("account_id", user.sub)
+        .maybeSingle()
+    : await supabase
+        .from("participants")
+        .insert({
+          account_id: user.sub,
+          first_name: firstName,
+          last_name: lastName,
+          birth_date: birthDate,
+        })
+        .select("id")
+        .single();
+  if (participantError || !participant)
+    redirect(
+      `/register/${catalogItemId}?error=${encodeURIComponent(participantError?.message ?? "Unable to save participant details.")}`,
+    );
 
-  const { error } = await supabase.from("registrations").insert({ account_id: user.sub, catalog_item_id: item.id, participant_id: participant.id, price_cents: item.price_cents, status: "draft" });
-  if (error) redirect(`/register/${catalogItemId}?error=${encodeURIComponent(error.code === "23505" ? "This participant already has a registration for this offering." : error.message)}`);
-  redirect(`${next === "/checkout" ? "/checkout" : "/account"}?message=Registration+saved.+Choose+payment+from+your+account.`);
+  if (waitlistEntryId) {
+    const { data: waitlistEntry } = await supabase
+      .from("waitlist_entries")
+      .select("id")
+      .eq("id", waitlistEntryId)
+      .eq("account_id", user.sub)
+      .eq("catalog_item_id", item.id)
+      .eq("participant_id", participant.id)
+      .eq("status", "offered")
+      .maybeSingle();
+    if (!waitlistEntry)
+      redirect(
+        `/register/${catalogItemId}?error=This+waitlist+offer+is+no+longer+available.`,
+      );
+  }
+
+  const { error } = await supabase
+    .from("registrations")
+    .insert({
+      account_id: user.sub,
+      catalog_item_id: item.id,
+      participant_id: participant.id,
+      price_cents: item.price_cents,
+      status: "draft",
+    });
+  if (error)
+    redirect(
+      `/register/${catalogItemId}?error=${encodeURIComponent(error.code === "23505" ? "This participant already has a registration for this offering." : error.message)}`,
+    );
+  redirect(
+    `${next === "/checkout" ? "/checkout" : "/account"}?message=Registration+saved.+Choose+payment+from+your+account.`,
+  );
 }

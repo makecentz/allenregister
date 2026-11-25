@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { beginRegistrationCheckout } from "@/app/checkout/actions";
 import { SiteFrame } from "@/components/site-frame";
 import { saveParticipant, saveProfile } from "@/app/account/actions";
+import { withdrawFromWaitlist } from "@/app/waitlist/actions";
 
 export const instant = false;
 
@@ -76,6 +77,14 @@ export default async function AccountPage({
     .select("id,recipient_name,code,balance_cents,status,created_at")
     .eq("purchaser_id", user.sub)
     .order("created_at", { ascending: false });
+  const { data: waitlistEntries } = await supabase
+    .from("waitlist_entries")
+    .select(
+      "id,status,created_at,catalog_item_id,catalog_items(title,item_type),participants(id,first_name,last_name)",
+    )
+    .eq("account_id", user.sub)
+    .in("status", ["waiting", "offered"])
+    .order("created_at", { ascending: true });
   const memberships =
     orders?.flatMap((order) =>
       order.status === "paid"
@@ -135,8 +144,16 @@ export default async function AccountPage({
                           name="registrationId"
                           value={registration.id}
                         />
+                        <label className="gift-code-field">
+                          Gift certificate code <span>(optional)</span>
+                          <input
+                            autoCapitalize="characters"
+                            name="giftCertificateCode"
+                            placeholder="ALAC-XXXX"
+                          />
+                        </label>
                         <button className="button button-primary">
-                          Pay test tuition
+                          Pay tuition
                         </button>
                       </form>
                     ) : null}
@@ -241,6 +258,49 @@ export default async function AccountPage({
             </label>
             <button className="button button-primary">Add participant</button>
           </form>
+        </section>
+        <section className="account-purchases">
+          <p className="eyebrow">Waitlists</p>
+          <h2>Your place in line</h2>
+          {waitlistEntries?.length ? (
+            <div className="registration-list">
+              {waitlistEntries.map((entry) => {
+                const item = entry.catalog_items as {
+                  title?: string;
+                  item_type?: string;
+                } | null;
+                const participant = entry.participants as {
+                  id?: string;
+                  first_name?: string;
+                  last_name?: string;
+                } | null;
+                return (
+                  <div className="registration-entry" key={entry.id}>
+                    <strong>{item?.title ?? "Allens Lane offering"}</strong>
+                    <br />
+                    <span>
+                      {participant?.first_name} {participant?.last_name} ·{" "}
+                      {entry.status === "offered" ? "space offered" : "waiting"}
+                    </span>
+                    <form action={withdrawFromWaitlist}>
+                      <input name="entryId" type="hidden" value={entry.id} />
+                      <button className="button">Leave waitlist</button>
+                    </form>
+                    {entry.status === "offered" && participant?.id ? (
+                      <Link
+                        className="button button-primary"
+                        href={`/register/${entry.catalog_item_id}?waitlistEntry=${entry.id}`}
+                      >
+                        Register now
+                      </Link>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p>You are not currently waiting for a class or camp space.</p>
+          )}
         </section>
         <section className="account-purchases">
           <p className="eyebrow">Event tickets</p>

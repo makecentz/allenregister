@@ -20,14 +20,17 @@ export async function POST(request: Request) {
   }
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    const settled =
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required";
     const registrationId = session.metadata?.registration_id;
-    if (registrationId && session.payment_status === "paid") {
+    if (registrationId && settled) {
       try {
         const paymentIntentId =
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : (session.payment_intent?.id ?? null);
-        const { error } = await createAdminClient()
+        const { data: confirmedRegistration, error } = await createAdminClient()
           .from("registrations")
           .update({
             status: "confirmed",
@@ -35,11 +38,33 @@ export async function POST(request: Request) {
             stripe_payment_intent_id: paymentIntentId,
           })
           .eq("id", registrationId)
-          .eq("status", "draft");
+          .eq("status", "pending_payment")
+          .select("account_id,catalog_item_id,participant_id")
+          .maybeSingle();
         if (error)
           return new NextResponse("Unable to confirm registration", {
             status: 500,
           });
+        const { error: giftError } = await createAdminClient().rpc(
+          "finalize_gift_certificate_redemption",
+          { p_order_id: null, p_registration_id: registrationId },
+        );
+        if (giftError)
+          return new NextResponse("Unable to apply gift certificate", {
+            status: 500,
+          });
+        if (confirmedRegistration) {
+          await createAdminClient()
+            .from("waitlist_entries")
+            .update({
+              status: "enrolled",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("account_id", confirmedRegistration.account_id)
+            .eq("catalog_item_id", confirmedRegistration.catalog_item_id)
+            .eq("participant_id", confirmedRegistration.participant_id)
+            .eq("status", "offered");
+        }
       } catch {
         return new NextResponse("Unable to confirm registration", {
           status: 500,
@@ -47,7 +72,7 @@ export async function POST(request: Request) {
       }
     }
     const orderId = session.metadata?.order_id;
-    if (orderId && session.payment_status === "paid") {
+    if (orderId && settled) {
       try {
         const paymentIntentId =
           typeof session.payment_intent === "string"
@@ -70,6 +95,21 @@ export async function POST(request: Request) {
           return new NextResponse("Unable to complete product order", {
             status: 500,
           });
+        if (String(data) === "inventory_issue") {
+          await createAdminClient().rpc("release_gift_certificate_redemption", {
+            p_order_id: orderId,
+            p_registration_id: null,
+          });
+        } else {
+          const { error: giftError } = await createAdminClient().rpc(
+            "finalize_gift_certificate_redemption",
+            { p_order_id: orderId, p_registration_id: null },
+          );
+          if (giftError)
+            return new NextResponse("Unable to apply gift certificate", {
+              status: 500,
+            });
+        }
       } catch {
         return new NextResponse("Unable to complete product order", {
           status: 500,
@@ -157,6 +197,59 @@ export async function POST(request: Request) {
           status: 500,
         });
       }
+    }
+  }
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const registrationId = session.metadata?.registration_id;
+    const orderId = session.metadata?.order_id;
+    if (registrationId) {
+      await createAdminClient()
+        .from("registrations")
+        .update({
+          status: "draft",
+          checkout_expires_at: null,
+          stripe_checkout_session_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", registrationId)
+        .eq("status", "pending_payment")
+        .eq("stripe_checkout_session_id", session.id);
+      await createAdminClient().rpc("release_gift_certificate_redemption", {
+        p_order_id: null,
+        p_registration_id: registrationId,
+      });
+    }
+    if (orderId) {
+      await createAdminClient()
+        .from("orders")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", orderId)
+        .eq("status", "pending_payment")
+        .eq("stripe_checkout_session_id", session.id);
+      await createAdminClient().rpc("release_gift_certificate_redemption", {
+        p_order_id: orderId,
+        p_registration_id: null,
+      });
+    }
+  }
+  if (event.type === "refund.updated") {
+    const refund = event.data.object as Stripe.Refund;
+    const paymentIntentId =
+      typeof refund.payment_intent === "string"
+        ? refund.payment_intent
+        : refund.payment_intent?.id;
+    if (paymentIntentId && refund.status === "succeeded") {
+      await createAdminClient()
+        .from("orders")
+        .update({
+          status: "refunded",
+          fulfillment_status: "cancelled",
+          refunded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .eq("status", "refund_pending");
     }
   }
   return NextResponse.json({ received: true });

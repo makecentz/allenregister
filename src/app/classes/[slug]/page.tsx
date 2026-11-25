@@ -91,12 +91,12 @@ export default async function ClassDetailPage({
             {memberPrice ? <p>Members: {memberPrice}</p> : null}
             {materials ? <p>Materials fee: {materials}</p> : null}
             {metadata.availability === "waitlist" ? (
-              <a
+              <Link
                 className="button button-primary"
-                href={`mailto:info@allenslane.org?subject=${encodeURIComponent(`Waitlist request: ${item.title}`)}`}
+                href={`/waitlist/${item.id}`}
               >
                 Join waitlist
-              </a>
+              </Link>
             ) : metadata.availability === "info" ? (
               <a className="button" href="mailto:info@allenslane.org">
                 Contact us

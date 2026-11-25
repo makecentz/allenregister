@@ -84,12 +84,10 @@ export async function createInstructor(formData: FormData) {
     redirect(
       "/admin/instructors/new?error=Please+complete+the+required+details+and+use+valid+URLs.",
     );
-  const { error } = await supabase
-    .from("instructors")
-    .insert({
-      ...payload,
-      slug: `${slugify(payload.full_name)}-${Date.now().toString(36)}`,
-    });
+  const { error } = await supabase.from("instructors").insert({
+    ...payload,
+    slug: `${slugify(payload.full_name)}-${Date.now().toString(36)}`,
+  });
   if (error)
     redirect(
       `/admin/instructors/new?error=${encodeURIComponent(error.message)}`,
@@ -221,13 +219,11 @@ export async function createCamp(formData: FormData) {
     redirect(
       "/admin/camp/new?error=Please+complete+the+required+camp+details.",
     );
-  const { error } = await supabase
-    .from("catalog_items")
-    .insert({
-      ...payload,
-      item_type: "camp",
-      slug: `${slugify(payload.title)}-${Date.now().toString(36)}`,
-    });
+  const { error } = await supabase.from("catalog_items").insert({
+    ...payload,
+    item_type: "camp",
+    slug: `${slugify(payload.title)}-${Date.now().toString(36)}`,
+  });
   if (error)
     redirect(`/admin/camp/new?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/camp");
@@ -320,13 +316,11 @@ export async function createProduct(formData: FormData) {
     redirect(
       "/admin/products/new?error=Please+complete+the+required+product+details.",
     );
-  const { error } = await supabase
-    .from("catalog_items")
-    .insert({
-      ...payload,
-      item_type: "product",
-      slug: `${slugify(payload.title)}-${Date.now().toString(36)}`,
-    });
+  const { error } = await supabase.from("catalog_items").insert({
+    ...payload,
+    item_type: "product",
+    slug: `${slugify(payload.title)}-${Date.now().toString(36)}`,
+  });
   if (error)
     redirect(`/admin/products/new?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/shop");
@@ -611,16 +605,14 @@ export async function toggleRegistrationAttendance(formData: FormData) {
     redirect("/admin/attendance?error=Choose+an+offering+and+attendance+date.");
   const { data: claims } = await supabase.auth.getClaims();
   const { error } = present
-    ? await supabase
-        .from("registration_attendance")
-        .upsert(
-          {
-            registration_id: registrationId,
-            attended_on: attendedOn,
-            recorded_by: claims?.claims?.sub,
-          },
-          { onConflict: "registration_id,attended_on" },
-        )
+    ? await supabase.from("registration_attendance").upsert(
+        {
+          registration_id: registrationId,
+          attended_on: attendedOn,
+          recorded_by: claims?.claims?.sub,
+        },
+        { onConflict: "registration_id,attended_on" },
+      )
     : await supabase
         .from("registration_attendance")
         .delete()
@@ -759,14 +751,12 @@ export async function createDonationFund(formData: FormData) {
   const name = text(formData, "name");
   if (!name) redirect("/admin/funds/new?error=Please+enter+a+fund+name.");
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("donation_funds")
-    .insert({
-      name,
-      slug: `${slugify(name)}-${Date.now().toString(36)}`,
-      description: text(formData, "description") || null,
-      is_active: true,
-    });
+  const { error } = await supabase.from("donation_funds").insert({
+    name,
+    slug: `${slugify(name)}-${Date.now().toString(36)}`,
+    description: text(formData, "description") || null,
+    is_active: true,
+  });
   if (error)
     redirect(`/admin/funds/new?error=${encodeURIComponent(error.message)}`);
   redirect("/admin/funds?message=Donation+fund+created");
@@ -811,4 +801,28 @@ export async function createCatalogItem(formData: FormData) {
   if (error)
     redirect(`/admin/catalog/new?error=${encodeURIComponent(error.message)}`);
   redirect("/admin?message=Catalog+item+created");
+}
+
+export async function updateWaitlistEntry(formData: FormData) {
+  const entryId = text(formData, "entryId");
+  const status = text(formData, "status");
+  if (
+    !entryId ||
+    !["waiting", "offered", "enrolled", "withdrawn"].includes(status)
+  )
+    redirect("/admin/waitlist?error=Choose+a+valid+waitlist+status.");
+  const supabase = await requireStaff("/admin/waitlist");
+  const { error } = await supabase
+    .from("waitlist_entries")
+    .update({
+      status,
+      staff_note: text(formData, "staffNote") || null,
+      offered_at: status === "offered" ? new Date().toISOString() : null,
+    })
+    .eq("id", entryId);
+  if (error)
+    redirect(`/admin/waitlist?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/account");
+  revalidatePath("/admin/waitlist");
+  redirect("/admin/waitlist?message=Waitlist+entry+updated");
 }
