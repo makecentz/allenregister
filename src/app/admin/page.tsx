@@ -15,6 +15,12 @@ type TicketOrderMetric = {
   total_cents: number;
   created_at: string;
 };
+type CommerceOrderMetric = {
+  account_id: string;
+  status: string;
+  subtotal_cents: number;
+  created_at: string;
+};
 
 function dayLabel(value: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
@@ -57,6 +63,7 @@ export default async function AdminPage() {
     { count: eventCount },
     { data: registrations },
     { data: ticketOrders },
+    { data: commerceOrders },
     { count: issuedTicketCount },
     { data: recentItems },
   ] = await Promise.all([
@@ -84,6 +91,11 @@ export default async function AdminPage() {
       .order("created_at", { ascending: false })
       .limit(500),
     supabase
+      .from("orders")
+      .select("account_id,status,subtotal_cents,created_at")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase
       .from("tickets")
       .select("id", { count: "exact", head: true })
       .in("status", ["issued", "checked_in"]),
@@ -97,9 +109,11 @@ export default async function AdminPage() {
   const registrationRows = (registrations ??
     []) as unknown as RegistrationMetric[];
   const orderRows = (ticketOrders ?? []) as TicketOrderMetric[];
+  const commerceRows = (commerceOrders ?? []) as CommerceOrderMetric[];
   const customerIds = new Set([
     ...registrationRows.map((registration) => registration.account_id),
     ...orderRows.map((order) => order.account_id),
+    ...commerceRows.map((order) => order.account_id),
   ]);
   const confirmedRegistrations = registrationRows.filter(
     (registration) => registration.status === "confirmed",
@@ -112,17 +126,28 @@ export default async function AdminPage() {
   const ticketRevenue = orderRows
     .filter((order) => order.status === "paid")
     .reduce((sum, order) => sum + order.total_cents, 0);
+  const commerceRevenue = commerceRows
+    .filter((order) => order.status === "paid")
+    .reduce((sum, order) => sum + order.subtotal_cents, 0);
+  const portalRevenue = ticketRevenue + commerceRevenue;
   const today = new Date();
   const dailySales = Array.from({ length: 7 }, (_, index) => {
     const day = new Date(today);
     day.setDate(today.getDate() - (6 - index));
     const key = day.toISOString().slice(0, 10);
-    const total = orderRows
-      .filter(
-        (order) =>
-          order.status === "paid" && order.created_at.slice(0, 10) === key,
-      )
-      .reduce((sum, order) => sum + order.total_cents, 0);
+    const total =
+      orderRows
+        .filter(
+          (order) =>
+            order.status === "paid" && order.created_at.slice(0, 10) === key,
+        )
+        .reduce((sum, order) => sum + order.total_cents, 0) +
+      commerceRows
+        .filter(
+          (order) =>
+            order.status === "paid" && order.created_at.slice(0, 10) === key,
+        )
+        .reduce((sum, order) => sum + order.subtotal_cents, 0);
     return { label: dayLabel(day.toISOString()), total };
   });
   const maxSales = Math.max(...dailySales.map((day) => day.total), 1);
@@ -167,28 +192,34 @@ export default async function AdminPage() {
         <article>
           <span>Customers</span>
           <strong>{customerIds.size}</strong>
-          <small>Accounts with registrations or tickets</small>
+          <small>Accounts with registrations, tickets, or purchases</small>
         </article>
         <article>
-          <span>Ticket revenue</span>
+          <span>Portal revenue</span>
           <strong>
             $
-            {(ticketRevenue / 100).toLocaleString("en-US", {
+            {(portalRevenue / 100).toLocaleString("en-US", {
               minimumFractionDigits: 2,
             })}
           </strong>
-          <small>{issuedTicketCount ?? 0} issued tickets</small>
+          <small>
+            {issuedTicketCount ?? 0} issued tickets · $
+            {(commerceRevenue / 100).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            shop & membership revenue
+          </small>
         </article>
       </section>
       <section className="dashboard-grid">
         <article className="dashboard-panel dashboard-chart">
           <div>
-            <p className="eyebrow">Ticketing</p>
+            <p className="eyebrow">Portal sales</p>
             <h2>Sales, last 7 days</h2>
           </div>
           <div
             className="bar-chart"
-            aria-label="Ticket sales for the past seven days"
+            aria-label="Portal sales for the past seven days"
           >
             {dailySales.map((day) => (
               <div key={day.label}>
@@ -203,8 +234,8 @@ export default async function AdminPage() {
             ))}
           </div>
           <p className="dashboard-caption">
-            Paid ticket revenue only. Refunds and exchanges will be enabled
-            after policy approval.
+            Paid ticket, shop, and membership revenue. Refunds and exchanges
+            will be enabled after policy approval.
           </p>
         </article>
         <article className="dashboard-panel">
