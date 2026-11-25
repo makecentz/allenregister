@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { startRegistration } from "@/app/register/actions";
+import { ParticipantPicker } from "@/components/participant-picker";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/catalog";
+import { accountHolderName } from "@/lib/participants";
 
 export const instant = false;
 
@@ -32,11 +34,23 @@ export default async function RegisterPage({
   if (!item) notFound();
   const { data: claimsData } = await supabase.auth.getClaims();
   if (!claimsData?.claims) redirect(`/signup?next=/register/${itemId}`);
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("id,first_name,last_name,birth_date")
-    .eq("account_id", claimsData.claims.sub)
-    .order("first_name");
+  const [{ data: participants }, { data: profile }] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id,first_name,last_name,birth_date,is_account_holder")
+      .eq("account_id", claimsData.claims.sub)
+      .order("first_name"),
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", claimsData.claims.sub)
+      .maybeSingle(),
+  ]);
+  const userMetadataName =
+    typeof claimsData.claims.user_metadata?.full_name === "string"
+      ? claimsData.claims.user_metadata.full_name
+      : "";
+  const accountHolder = accountHolderName(profile?.full_name || userMetadataName);
 
   return (
     <main className="registration-page">
@@ -92,37 +106,16 @@ export default async function RegisterPage({
                 value={waitlistEntry}
               />
             ) : null}
-            {participants?.length ? (
-              <label>
-                Saved participant
-                <select defaultValue="" name="participantId">
-                  <option value="">Add a new participant below</option>
-                  {participants.map((participant) => (
-                    <option key={participant.id} value={participant.id}>
-                      {participant.first_name} {participant.last_name}
-                      {participant.birth_date
-                        ? ` · ${participant.birth_date}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <p className="small-note">
-              Leave the saved-participant choice blank to add someone new.
-            </p>
-            <label>
-              First name
-              <input name="firstName" autoComplete="given-name" />
-            </label>
-            <label>
-              Last name
-              <input name="lastName" autoComplete="family-name" />
-            </label>
-            <label>
-              Date of birth <span>(recommended for youth programs)</span>
-              <input name="birthDate" type="date" />
-            </label>
+            <ParticipantPicker
+              accountHolder={accountHolder}
+              participants={(participants ?? []).map((participant) => ({
+                id: participant.id,
+                firstName: participant.first_name,
+                lastName: participant.last_name,
+                birthDate: participant.birth_date,
+                isAccountHolder: participant.is_account_holder,
+              }))}
+            />
             {item.item_type === "camp" ? (
               <label className="check-label">
                 <input

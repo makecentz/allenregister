@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { accountHolderName } from "@/lib/participants";
 
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -30,6 +31,19 @@ export async function saveProfile(formData: FormData) {
   });
   if (authError)
     redirect(`/account?error=${encodeURIComponent(authError.message)}`);
+  const accountHolder = accountHolderName(fullName);
+  if (accountHolder) {
+    const { error: participantError } = await supabase
+      .from("participants")
+      .update({
+        first_name: accountHolder.firstName,
+        last_name: accountHolder.lastName,
+      })
+      .eq("account_id", userId)
+      .eq("is_account_holder", true);
+    if (participantError)
+      redirect(`/account?error=${encodeURIComponent(participantError.message)}`);
+  }
   revalidatePath("/");
   revalidatePath("/account");
   redirect("/account?message=Profile+saved.");

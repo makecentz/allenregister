@@ -133,6 +133,39 @@ input {
   font-size: 0.78rem;
   font-weight: 400;
 }
+.new-participant-fields {
+  display: grid;
+  gap: 1rem;
+}
+.saved-participant-summary {
+  background: #fffdf9;
+  border-left: 4px solid var(--purple);
+  display: grid;
+  gap: 0.35rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+}
+.saved-participant-summary p {
+  margin: 0;
+}
+.saved-participant-summary strong {
+  font-size: 1.1rem;
+}
+.saved-participant-summary span {
+  color: #625951;
+  font-size: 0.9rem;
+}
+.saved-participant-summary button {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  justify-self: start;
+  margin-top: 0.35rem;
+  padding: 0;
+  text-decoration: underline;
+}
 .form-error {
   background: #ffe0df;
   border-left: 4px solid var(--red);

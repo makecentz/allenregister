@@ -4,6 +4,8 @@ import { SiteFrame } from "@/components/site-frame";
 import { formatPrice } from "@/lib/catalog";
 import { createClient } from "@/lib/supabase/server";
 import { joinWaitlist } from "@/app/waitlist/actions";
+import { ParticipantPicker } from "@/components/participant-picker";
+import { accountHolderName } from "@/lib/participants";
 
 export const instant = false;
 
@@ -27,11 +29,23 @@ export default async function WaitlistPage({
   if (!item) notFound();
   const { data: claimsData } = await supabase.auth.getClaims();
   if (!claimsData?.claims) redirect(`/signup?next=/waitlist/${itemId}`);
-  const { data: participants } = await supabase
-    .from("participants")
-    .select("id,first_name,last_name,birth_date")
-    .eq("account_id", claimsData.claims.sub)
-    .order("first_name");
+  const [{ data: participants }, { data: profile }] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id,first_name,last_name,birth_date,is_account_holder")
+      .eq("account_id", claimsData.claims.sub)
+      .order("first_name"),
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", claimsData.claims.sub)
+      .maybeSingle(),
+  ]);
+  const userMetadataName =
+    typeof claimsData.claims.user_metadata?.full_name === "string"
+      ? claimsData.claims.user_metadata.full_name
+      : "";
+  const accountHolder = accountHolderName(profile?.full_name || userMetadataName);
 
   return (
     <SiteFrame>
@@ -61,34 +75,16 @@ export default async function WaitlistPage({
             {error ? <p className="form-error">{error}</p> : null}
             <form action={joinWaitlist}>
               <input name="itemId" type="hidden" value={item.id} />
-              {participants?.length ? (
-                <label>
-                  Saved participant
-                  <select defaultValue="" name="participantId">
-                    <option value="">Add a new participant below</option>
-                    {participants.map((participant) => (
-                      <option key={participant.id} value={participant.id}>
-                        {participant.first_name} {participant.last_name}
-                        {participant.birth_date
-                          ? ` · ${participant.birth_date}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <label>
-                First name
-                <input autoComplete="given-name" name="firstName" />
-              </label>
-              <label>
-                Last name
-                <input autoComplete="family-name" name="lastName" />
-              </label>
-              <label>
-                Date of birth <span>(recommended for youth programs)</span>
-                <input name="birthDate" type="date" />
-              </label>
+              <ParticipantPicker
+                accountHolder={accountHolder}
+                participants={(participants ?? []).map((participant) => ({
+                  id: participant.id,
+                  firstName: participant.first_name,
+                  lastName: participant.last_name,
+                  birthDate: participant.birth_date,
+                  isAccountHolder: participant.is_account_holder,
+                }))}
+              />
               <button className="button button-primary">Join waitlist</button>
             </form>
           </section>

@@ -3,6 +3,10 @@
 import { redirect } from "next/navigation";
 import { escapeEmailHtml, sendTransactionalEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
+import {
+  resolveAccountHolderParticipant,
+} from "@/lib/participants";
+import { ACCOUNT_HOLDER_PARTICIPANT_ID } from "@/lib/participant-constants";
 
 function value(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -32,23 +36,32 @@ export async function joinWaitlist(formData: FormData) {
     .maybeSingle();
   if (!item) redirect("/classes");
 
-  const { data: participant, error: participantError } = existingParticipantId
-    ? await supabase
-        .from("participants")
-        .select("id")
-        .eq("id", existingParticipantId)
-        .eq("account_id", user.sub)
-        .maybeSingle()
-    : await supabase
-        .from("participants")
-        .insert({
-          account_id: user.sub,
-          first_name: firstName,
-          last_name: lastName,
-          birth_date: birthDate,
-        })
-        .select("id")
-        .single();
+  const profileName =
+    typeof user.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name
+      : "";
+  const { participant, error: participantError } =
+    existingParticipantId === ACCOUNT_HOLDER_PARTICIPANT_ID
+      ? await resolveAccountHolderParticipant(user.sub, profileName)
+      : existingParticipantId
+        ? await supabase
+            .from("participants")
+            .select("id")
+            .eq("id", existingParticipantId)
+            .eq("account_id", user.sub)
+            .maybeSingle()
+            .then(({ data, error }) => ({ participant: data, error }))
+        : await supabase
+            .from("participants")
+            .insert({
+              account_id: user.sub,
+              first_name: firstName,
+              last_name: lastName,
+              birth_date: birthDate,
+            })
+            .select("id")
+            .single()
+            .then(({ data, error }) => ({ participant: data, error }));
   if (participantError || !participant)
     redirect(
       `/waitlist/${itemId}?error=${encodeURIComponent(participantError?.message ?? "Unable to save participant details.")}`,
