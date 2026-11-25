@@ -98,7 +98,7 @@ export function CartLink() {
 export function CartAddButton({
   item,
   label = "Add to cart",
-  unavailableLabel = "Coming soon",
+  unavailableLabel = "Unavailable",
 }: {
   item: Omit<CartItem, "quantity"> | null;
   label?: string;

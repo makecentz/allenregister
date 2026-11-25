@@ -59,8 +59,8 @@ export default async function GiftCertificatesPage({
           </form>
           <p className="small-note">
             An account is required at checkout. Certificate codes are issued
-            after Stripe confirms payment; redemption will be added in the next
-            commerce phase.
+            after Stripe confirms payment. Present the issued code to Allens
+            Lane staff when using the certificate.
           </p>
         </section>
       </main>
