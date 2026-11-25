@@ -294,6 +294,10 @@ export default async function AdminPage() {
           <strong>Waitlists</strong>
           <span>Offer and manage program spaces</span>
         </Link>
+        <Link href="/admin/communications">
+          <strong>Email students</strong>
+          <span>Send updates to confirmed households</span>
+        </Link>
         <Link href="/admin/reports">
           <strong>Reports</strong>
           <span>Export rosters and review activity</span>

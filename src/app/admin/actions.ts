@@ -856,3 +856,79 @@ export async function updateWaitlistEntry(formData: FormData) {
   revalidatePath("/admin/waitlist");
   redirect("/admin/waitlist?message=Waitlist+entry+updated");
 }
+
+export async function sendProgramEmail(formData: FormData) {
+  const catalogItemId = text(formData, "catalogItemId");
+  const subject = text(formData, "subject");
+  const message = text(formData, "message");
+  if (!catalogItemId || !subject || !message || subject.length > 160 || message.length > 5000)
+    redirect("/admin/communications?error=Choose+an+offering+and+enter+a+subject+and+message.");
+
+  const supabase = await requireStaff("/admin/communications");
+  const { data: claims } = await supabase.auth.getClaims();
+  const { data: offering } = await supabase
+    .from("catalog_items")
+    .select("id,title,item_type")
+    .eq("id", catalogItemId)
+    .in("item_type", ["class", "camp"])
+    .maybeSingle();
+  if (!offering)
+    redirect("/admin/communications?error=Choose+a+valid+class+or+camp+session.");
+
+  const { data: registrations } = await supabase
+    .from("registrations")
+    .select("account_id")
+    .eq("catalog_item_id", offering.id)
+    .eq("status", "confirmed");
+  const accountIds = [
+    ...new Set((registrations ?? []).map((registration) => registration.account_id)),
+  ];
+  if (!accountIds.length)
+    redirect("/admin/communications?error=There+are+no+confirmed+households+to+email+for+this+offering.");
+  if (accountIds.length > 100)
+    redirect("/admin/communications?error=This+offering+has+more+than+100+households.+Please+contact+the+site+administrator+for+a+bulk-send+export.");
+
+  const users = await Promise.all(
+    accountIds.map((accountId) =>
+      createAdminClient().auth.admin.getUserById(accountId),
+    ),
+  );
+  const recipients = [
+    ...new Set(
+      users
+        .map(({ data }) => data.user?.email?.trim().toLowerCase())
+        .filter((email): email is string => Boolean(email)),
+    ),
+  ];
+  if (!recipients.length)
+    redirect("/admin/communications?error=No+deliverable+email+addresses+were+found+for+this+offering.");
+
+  const htmlMessage = escapeEmailHtml(message).replace(/\n/g, "<br />");
+  const results = await Promise.all(
+    recipients.map((recipient) =>
+      sendTransactionalEmail({
+        to: recipient,
+        subject,
+        html: `<p><strong>${escapeEmailHtml(offering.title)}</strong></p><p>${htmlMessage}</p><p>Allens Lane Art Center</p>`,
+        text: `${offering.title}\n\n${message}\n\nAllens Lane Art Center`,
+      }),
+    ),
+  );
+  const recipientCount = results.filter((result) => result.delivered).length;
+  if (!recipientCount)
+    redirect("/admin/communications?error=The+email+service+did+not+accept+the+message.+Check+the+Resend+configuration+and+try+again.");
+
+  const { error: logError } = await supabase.from("program_email_log").insert({
+    sent_by: claims?.claims?.sub,
+    catalog_item_id: offering.id,
+    subject,
+    message,
+    recipient_count: recipientCount,
+  });
+  if (logError)
+    redirect(`/admin/communications?error=${encodeURIComponent(logError.message)}`);
+  revalidatePath("/admin/communications");
+  redirect(
+    `/admin/communications?message=${encodeURIComponent(`Email accepted for delivery to ${recipientCount} household${recipientCount === 1 ? "" : "s"}.`)}`,
+  );
+}
