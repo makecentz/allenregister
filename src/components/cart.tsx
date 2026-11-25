@@ -5,6 +5,7 @@ import {
   createContext,
   useContext,
   useMemo,
+  useState,
   useSyncExternalStore,
 } from "react";
 import {
@@ -21,7 +22,7 @@ export type CartItem = {
 };
 type CartContextValue = {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, "quantity">) => void;
+  addItem: (item: Omit<CartItem, "quantity">) => "added" | "existing";
   removeItem: (id: string) => void;
   count: number;
   total: number;
@@ -58,8 +59,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       items,
       addItem: (item) => {
         const existing = items.find((entry) => entry.id === item.id);
-        if (!existing) writeItems([...items, { ...item, quantity: 1 }]);
-        else if (item.itemType === "product")
+        if (!existing) {
+          writeItems([...items, { ...item, quantity: 1 }]);
+          return "added";
+        }
+        if (item.itemType === "product") {
           writeItems(
             items.map((entry) =>
               entry.id === item.id
@@ -67,6 +71,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 : entry,
             ),
           );
+          return "added";
+        }
+        return "existing";
       },
       removeItem: (id) => writeItems(items.filter((item) => item.id !== id)),
       count: items.reduce((sum, item) => sum + item.quantity, 0),
@@ -105,6 +112,7 @@ export function CartAddButton({
   unavailableLabel?: string;
 }) {
   const { addItem } = useCart();
+  const [result, setResult] = useState<"added" | "existing" | null>(null);
   if (!item)
     return (
       <button className="button button-primary" disabled>
@@ -112,9 +120,23 @@ export function CartAddButton({
       </button>
     );
   return (
-    <button className="button button-primary" onClick={() => addItem(item)}>
-      {label}
-    </button>
+    <div className="cart-add-action">
+      <button
+        className="button button-primary"
+        onClick={() => setResult(addItem(item))}
+        type="button"
+      >
+        {result === "added" ? "Added to cart" : label}
+      </button>
+      {result ? (
+        <p aria-live="polite" className="cart-add-confirmation">
+          {result === "added"
+            ? `${item.title} is in your cart.`
+            : `${item.title} is already in your cart.`}{" "}
+          <Link href="/cart">View cart</Link>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
