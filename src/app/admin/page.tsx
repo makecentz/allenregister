@@ -7,6 +7,8 @@ export const instant = false;
 type RegistrationMetric = {
   account_id: string;
   status: string;
+  price_cents: number;
+  created_at: string;
   catalog_items: { item_type?: string } | null;
 };
 type TicketOrderMetric = {
@@ -21,6 +23,7 @@ type CommerceOrderMetric = {
   subtotal_cents: number;
   created_at: string;
 };
+type DonationMetric = { account_id: string; status: string; amount_cents: number; created_at: string };
 
 function dayLabel(value: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
@@ -64,6 +67,7 @@ export default async function AdminPage() {
     { data: registrations },
     { data: ticketOrders },
     { data: commerceOrders },
+    { data: donations },
     { count: issuedTicketCount },
     { data: recentItems },
   ] = await Promise.all([
@@ -84,7 +88,7 @@ export default async function AdminPage() {
       .eq("status", "published"),
     supabase
       .from("registrations")
-      .select("account_id,status,catalog_items(item_type)"),
+      .select("account_id,status,price_cents,created_at,catalog_items(item_type)"),
     supabase
       .from("ticket_orders")
       .select("account_id,status,total_cents,created_at")
@@ -93,6 +97,11 @@ export default async function AdminPage() {
     supabase
       .from("orders")
       .select("account_id,status,subtotal_cents,created_at")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase
+      .from("donations")
+      .select("account_id,status,amount_cents,created_at")
       .order("created_at", { ascending: false })
       .limit(500),
     supabase
@@ -110,10 +119,12 @@ export default async function AdminPage() {
     []) as unknown as RegistrationMetric[];
   const orderRows = (ticketOrders ?? []) as TicketOrderMetric[];
   const commerceRows = (commerceOrders ?? []) as CommerceOrderMetric[];
+  const donationRows = (donations ?? []) as DonationMetric[];
   const customerIds = new Set([
     ...registrationRows.map((registration) => registration.account_id),
     ...orderRows.map((order) => order.account_id),
     ...commerceRows.map((order) => order.account_id),
+    ...donationRows.map((donation) => donation.account_id),
   ]);
   const confirmedRegistrations = registrationRows.filter(
     (registration) => registration.status === "confirmed",
@@ -129,7 +140,14 @@ export default async function AdminPage() {
   const commerceRevenue = commerceRows
     .filter((order) => order.status === "paid")
     .reduce((sum, order) => sum + order.subtotal_cents, 0);
-  const portalRevenue = ticketRevenue + commerceRevenue;
+  const registrationRevenue = registrationRows
+    .filter((registration) => registration.status === "confirmed")
+    .reduce((sum, registration) => sum + registration.price_cents, 0);
+  const donationRevenue = donationRows
+    .filter((donation) => donation.status === "paid")
+    .reduce((sum, donation) => sum + donation.amount_cents, 0);
+  const portalRevenue =
+    ticketRevenue + commerceRevenue + registrationRevenue + donationRevenue;
   const today = new Date();
   const dailySales = Array.from({ length: 7 }, (_, index) => {
     const day = new Date(today);
@@ -147,7 +165,20 @@ export default async function AdminPage() {
           (order) =>
             order.status === "paid" && order.created_at.slice(0, 10) === key,
         )
-        .reduce((sum, order) => sum + order.subtotal_cents, 0);
+        .reduce((sum, order) => sum + order.subtotal_cents, 0) +
+      registrationRows
+        .filter(
+          (registration) =>
+            registration.status === "confirmed" &&
+            registration.created_at.slice(0, 10) === key,
+        )
+        .reduce((sum, registration) => sum + registration.price_cents, 0) +
+      donationRows
+        .filter(
+          (donation) =>
+            donation.status === "paid" && donation.created_at.slice(0, 10) === key,
+        )
+        .reduce((sum, donation) => sum + donation.amount_cents, 0);
     return { label: dayLabel(day.toISOString()), total };
   });
   const maxSales = Math.max(...dailySales.map((day) => day.total), 1);
@@ -206,8 +237,13 @@ export default async function AdminPage() {
             {issuedTicketCount ?? 0} issued tickets · $
             {(commerceRevenue / 100).toLocaleString("en-US", {
               minimumFractionDigits: 2,
-            })}{" "}
-            shop & membership revenue
+            })} shop & membership · $
+            {(registrationRevenue / 100).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })} tuition · $
+            {(donationRevenue / 100).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })} giving
           </small>
         </article>
       </section>
@@ -234,8 +270,7 @@ export default async function AdminPage() {
             ))}
           </div>
           <p className="dashboard-caption">
-            Paid ticket, shop, and membership revenue. Refunds and exchanges
-            will be enabled after policy approval.
+            Paid ticket, shop, membership, class, camp, and donation activity.
           </p>
         </article>
         <article className="dashboard-panel">

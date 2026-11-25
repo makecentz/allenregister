@@ -7,6 +7,7 @@ export const instant = false;
 type RosterRow = {
   id: string;
   status: string;
+  price_cents: number;
   created_at: string;
   catalog_items: { title?: string; item_type?: string } | null;
   participants: {
@@ -24,6 +25,7 @@ type CommerceOrder = {
   order_items:
     { title?: string; item_type?: string; quantity?: number }[] | null;
 };
+type DonationRevenue = { status: string; amount_cents: number };
 
 export default async function ReportsPage() {
   const supabase = await createClient();
@@ -43,6 +45,7 @@ export default async function ReportsPage() {
     { data: registrations },
     { data: tickets },
     { data: commerceOrders },
+    { data: donationRows },
   ] = await Promise.all([
     supabase.from("catalog_items").select("id", { count: "exact", head: true }),
     supabase
@@ -52,7 +55,7 @@ export default async function ReportsPage() {
     supabase
       .from("registrations")
       .select(
-        "id,status,created_at,catalog_items(title,item_type),participants(first_name,last_name,birth_date)",
+        "id,status,price_cents,created_at,catalog_items(title,item_type),participants(first_name,last_name,birth_date)",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -69,6 +72,7 @@ export default async function ReportsPage() {
       )
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase.from("donations").select("status,amount_cents").limit(1000),
   ]);
   const rows = (registrations ?? []) as unknown as RosterRow[];
   const drafts = rows.filter(
@@ -101,6 +105,12 @@ export default async function ReportsPage() {
     (sum, order) => sum + order.subtotal_cents,
     0,
   );
+  const registrationRevenue = rows
+    .filter((registration) => registration.status === "confirmed")
+    .reduce((sum, registration) => sum + registration.price_cents, 0);
+  const donationRevenue = ((donationRows ?? []) as DonationRevenue[])
+    .filter((donation) => donation.status === "paid")
+    .reduce((sum, donation) => sum + donation.amount_cents, 0);
   const paidMemberships = paidCommerceOrders.filter((order) =>
     order.order_items?.some((item) => item.item_type === "membership"),
   ).length;
@@ -124,6 +134,9 @@ export default async function ReportsPage() {
           </a>
           <a className="button" href="/admin/reports/orders.csv">
             Export orders CSV
+          </a>
+          <a className="button" href="/admin/reports/revenue.csv">
+            Export revenue CSV
           </a>
         </div>
       </header>
@@ -153,12 +166,32 @@ export default async function ReportsPage() {
           <strong>{checkedInTickets}</strong>
         </article>
         <article>
-          <span>Commerce revenue</span>
+          <span>Shop & membership revenue</span>
           <strong>
             $
             {(commerceRevenue / 100).toLocaleString("en-US", {
               minimumFractionDigits: 2,
             })}
+          </strong>
+        </article>
+        <article>
+          <span>Class & camp tuition</span>
+          <strong>
+            ${
+              (registrationRevenue / 100).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+              })
+            }
+          </strong>
+        </article>
+        <article>
+          <span>Donations received</span>
+          <strong>
+            ${
+              (donationRevenue / 100).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+              })
+            }
           </strong>
         </article>
         <article>
