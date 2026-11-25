@@ -66,6 +66,16 @@ export default async function AccountPage({
     .select("id,first_name,last_name,birth_date")
     .eq("account_id", user.sub)
     .order("first_name");
+  const { data: donations } = await supabase
+    .from("donations")
+    .select("id,status,amount_cents,created_at,donation_funds(name)")
+    .eq("account_id", user.sub)
+    .order("created_at", { ascending: false });
+  const { data: giftCertificates } = await supabase
+    .from("gift_certificates")
+    .select("id,recipient_name,code,balance_cents,status,created_at")
+    .eq("purchaser_id", user.sub)
+    .order("created_at", { ascending: false });
   const memberships =
     orders?.flatMap((order) =>
       order.status === "paid"
@@ -296,6 +306,55 @@ export default async function AccountPage({
             </div>
           ) : (
             <p>You have not placed an order yet.</p>
+          )}
+        </section>
+        <section className="account-purchases">
+          <p className="eyebrow">Gift certificates</p>
+          <h2>Your gift certificates</h2>
+          {giftCertificates?.length ? (
+            <div className="registration-list">
+              {giftCertificates.map((certificate) => (
+                <div className="registration-entry" key={certificate.id}>
+                  <strong>{certificate.recipient_name}</strong>
+                  <br />
+                  <span className="registration-status">
+                    {certificate.status.replace("_", " ")} · $
+                    {(certificate.balance_cents / 100).toFixed(2)} remaining
+                  </span>
+                  <br />
+                  {certificate.status === "issued" ? (
+                    <code>{certificate.code}</code>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>
+              Gift certificates you purchase will appear here after payment.
+            </p>
+          )}
+        </section>
+        <section className="account-purchases">
+          <p className="eyebrow">Giving</p>
+          <h2>Donation history</h2>
+          {donations?.length ? (
+            <div className="registration-list">
+              {donations.map((donation) => (
+                <div className="registration-entry" key={donation.id}>
+                  <strong>
+                    {(donation.donation_funds as { name?: string } | null)
+                      ?.name ?? "General support"}
+                  </strong>
+                  <br />
+                  <span className="registration-status">
+                    {donation.status.replace("_", " ")} · $
+                    {(donation.amount_cents / 100).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>Your completed donations will appear here.</p>
           )}
         </section>
       </main>
