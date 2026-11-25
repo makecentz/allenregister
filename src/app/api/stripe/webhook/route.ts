@@ -1,7 +1,25 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { escapeEmailHtml, sendTransactionalEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe";
+
+function sessionEmail(session: Stripe.Checkout.Session) {
+  return session.customer_details?.email ?? session.customer_email;
+}
+
+async function sendPurchaseEmail(
+  session: Stripe.Checkout.Session,
+  subject: string,
+  message: string,
+) {
+  await sendTransactionalEmail({
+    to: sessionEmail(session),
+    subject,
+    html: `<p>${escapeEmailHtml(message)}</p><p>You can review your purchases and registrations from your Allens Lane account.</p>`,
+    text: `${message}\n\nYou can review your purchases and registrations from your Allens Lane account.`,
+  });
+}
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -64,6 +82,11 @@ export async function POST(request: Request) {
             .eq("catalog_item_id", confirmedRegistration.catalog_item_id)
             .eq("participant_id", confirmedRegistration.participant_id)
             .eq("status", "offered");
+          await sendPurchaseEmail(
+            session,
+            "Your Allens Lane registration is confirmed",
+            "Thank you — your registration has been confirmed.",
+          );
         }
       } catch {
         return new NextResponse("Unable to confirm registration", {
@@ -109,6 +132,12 @@ export async function POST(request: Request) {
             return new NextResponse("Unable to apply gift certificate", {
               status: 500,
             });
+          if (String(data) === "paid")
+            await sendPurchaseEmail(
+              session,
+              "Your Allens Lane order is confirmed",
+              "Thank you — your shop order has been confirmed.",
+            );
         }
       } catch {
         return new NextResponse("Unable to complete product order", {
@@ -138,6 +167,12 @@ export async function POST(request: Request) {
           )
         )
           return new NextResponse("Unable to issue tickets", { status: 500 });
+        if (String(data) === "paid")
+          await sendPurchaseEmail(
+            session,
+            "Your Allens Lane tickets are confirmed",
+            "Thank you — your event tickets have been issued.",
+          );
       } catch {
         return new NextResponse("Unable to issue tickets", { status: 500 });
       }
@@ -149,7 +184,7 @@ export async function POST(request: Request) {
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : (session.payment_intent?.id ?? null);
-        const { error } = await createAdminClient()
+        const { data: completedDonation, error } = await createAdminClient()
           .from("donations")
           .update({
             status: "paid",
@@ -162,11 +197,19 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", donationId)
-          .eq("status", "pending_payment");
+          .eq("status", "pending_payment")
+          .select("id")
+          .maybeSingle();
         if (error)
           return new NextResponse("Unable to complete donation", {
             status: 500,
           });
+        if (completedDonation)
+          await sendPurchaseEmail(
+            session,
+            "Thank you for supporting Allens Lane",
+            "Thank you for your donation to Allens Lane Art Center.",
+          );
       } catch {
         return new NextResponse("Unable to complete donation", { status: 500 });
       }
@@ -178,7 +221,7 @@ export async function POST(request: Request) {
           typeof session.payment_intent === "string"
             ? session.payment_intent
             : (session.payment_intent?.id ?? null);
-        const { error } = await createAdminClient()
+        const { data: issuedCertificate, error } = await createAdminClient()
           .from("gift_certificates")
           .update({
             status: "issued",
@@ -187,11 +230,23 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", giftCertificateId)
-          .eq("status", "pending_payment");
+          .eq("status", "pending_payment")
+          .select("recipient_email,recipient_name,code")
+          .maybeSingle();
         if (error)
           return new NextResponse("Unable to issue gift certificate", {
             status: 500,
           });
+        if (issuedCertificate) {
+          const recipient =
+            issuedCertificate.recipient_email ?? sessionEmail(session);
+          await sendTransactionalEmail({
+            to: recipient,
+            subject: "You received an Allens Lane gift certificate",
+            html: `<p>${escapeEmailHtml(issuedCertificate.recipient_name ? `Hello ${issuedCertificate.recipient_name},` : "Hello,")}</p><p>You received an Allens Lane Art Center gift certificate.</p><p>Your code is <strong>${escapeEmailHtml(issuedCertificate.code)}</strong>.</p>`,
+            text: `${issuedCertificate.recipient_name ? `Hello ${issuedCertificate.recipient_name}, ` : ""}You received an Allens Lane Art Center gift certificate. Your code is ${issuedCertificate.code}.`,
+          });
+        }
       } catch {
         return new NextResponse("Unable to issue gift certificate", {
           status: 500,

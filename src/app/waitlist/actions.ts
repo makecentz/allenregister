@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { escapeEmailHtml, sendTransactionalEmail } from "@/lib/email";
 import { createClient } from "@/lib/supabase/server";
 
 function value(formData: FormData, name: string) {
@@ -24,7 +25,7 @@ export async function joinWaitlist(formData: FormData) {
 
   const { data: item } = await supabase
     .from("catalog_items")
-    .select("id")
+    .select("id,title")
     .eq("id", itemId)
     .eq("status", "published")
     .in("item_type", ["class", "camp"])
@@ -62,6 +63,12 @@ export async function joinWaitlist(formData: FormData) {
     redirect(
       `/waitlist/${itemId}?error=${encodeURIComponent(error.code === "23505" ? "That participant is already on this waitlist." : error.message)}`,
     );
+  await sendTransactionalEmail({
+    to: "tara@allenslane.org",
+    subject: `Waitlist request: ${item.title}`,
+    html: `<p>A customer joined the waitlist for <strong>${escapeEmailHtml(item.title)}</strong>.</p><p>Account: ${escapeEmailHtml(user.email ?? "No email supplied")}</p><p>Participant: ${escapeEmailHtml(`${participant.id}`)}</p>`,
+    text: `A customer joined the waitlist for ${item.title}. Account: ${user.email ?? "No email supplied"}.`,
+  });
   redirect("/account?message=You+have+been+added+to+the+waitlist.");
 }
 

@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { escapeEmailHtml, sendTransactionalEmail } from "@/lib/email";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 function text(formData: FormData, name: string) {
@@ -812,6 +814,11 @@ export async function updateWaitlistEntry(formData: FormData) {
   )
     redirect("/admin/waitlist?error=Choose+a+valid+waitlist+status.");
   const supabase = await requireStaff("/admin/waitlist");
+  const { data: existingEntry } = await supabase
+    .from("waitlist_entries")
+    .select("account_id,status,catalog_items(title)")
+    .eq("id", entryId)
+    .maybeSingle();
   const { error } = await supabase
     .from("waitlist_entries")
     .update({
@@ -822,6 +829,29 @@ export async function updateWaitlistEntry(formData: FormData) {
     .eq("id", entryId);
   if (error)
     redirect(`/admin/waitlist?error=${encodeURIComponent(error.message)}`);
+  if (
+    status === "offered" &&
+    existingEntry?.status !== "offered" &&
+    existingEntry?.account_id
+  ) {
+    try {
+      const { data: userData } = await createAdminClient().auth.admin.getUserById(
+        existingEntry.account_id,
+      );
+      const catalogItem = existingEntry.catalog_items as unknown as
+        | { title?: string }
+        | null;
+      const title = catalogItem?.title ?? "your selected program";
+      await sendTransactionalEmail({
+        to: userData.user?.email,
+        subject: `A space is available: ${title}`,
+        html: `<p>Good news — a space is available for <strong>${escapeEmailHtml(title)}</strong>.</p><p>Sign in to your Allens Lane account to complete registration and payment.</p>`,
+        text: `Good news — a space is available for ${title}. Sign in to your Allens Lane account to complete registration and payment.`,
+      });
+    } catch {
+      // The status update is preserved if a notification service is unavailable.
+    }
+  }
   revalidatePath("/account");
   revalidatePath("/admin/waitlist");
   redirect("/admin/waitlist?message=Waitlist+entry+updated");

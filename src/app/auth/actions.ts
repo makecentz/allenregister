@@ -23,6 +23,7 @@ export async function signUp(formData: FormData) {
   const fullName = value(formData, "fullName");
   const next = safeNext(formData);
   if (!email || password.length < 8) redirect(withMessage("/signup", "error", "Use a valid email and a password of at least 8 characters."));
+  if (value(formData, "legalAccepted") !== "yes") redirect(withMessage("/signup", "error", "Please accept the Terms of Use and Privacy Policy to create an account."));
 
   const supabase = await createClient();
   const origin = (await headers()).get("origin") ?? "";

@@ -42,7 +42,11 @@ export function SiteFooter() {
       <div>
         <Link href="/gift-certificates">Gift certificates</Link>
         <Link href="/account">My account</Link>
-        <Link href="/contact">Contact</Link>
+        <Link href="/privacy">Privacy</Link>
+        <Link href="/terms">Terms</Link>
+        <Link href="/refunds">Refunds</Link>
+        <Link href="/camp-waiver">Camp waiver</Link>
+        <a href="mailto:tara@allenslane.org">Contact</a>
       </div>
     </footer>
   );

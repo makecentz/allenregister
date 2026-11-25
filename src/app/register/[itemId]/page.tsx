@@ -123,6 +123,18 @@ export default async function RegisterPage({
               Date of birth <span>(recommended for youth programs)</span>
               <input name="birthDate" type="date" />
             </label>
+            {item.item_type === "camp" ? (
+              <label className="check-label">
+                <input
+                  name="campWaiverAccepted"
+                  type="checkbox"
+                  value="yes"
+                  required
+                />
+                I have read and agree to the{" "}
+                <Link href="/camp-waiver">Camp Participation Waiver</Link>.
+              </label>
+            ) : null}
             <button className="button button-primary">Save registration</button>
           </form>
         </section>

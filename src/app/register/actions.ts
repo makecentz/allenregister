@@ -15,6 +15,7 @@ export async function startRegistration(formData: FormData) {
   const existingParticipantId = value(formData, "participantId");
   const next = value(formData, "next");
   const waitlistEntryId = value(formData, "waitlistEntryId");
+  const campWaiverAccepted = value(formData, "campWaiverAccepted");
   if (!catalogItemId || (!existingParticipantId && (!firstName || !lastName)))
     redirect(
       `/register/${catalogItemId}?error=Choose+a+saved+participant+or+complete+the+participant+details.`,
@@ -27,7 +28,7 @@ export async function startRegistration(formData: FormData) {
 
   const { data: item } = await supabase
     .from("catalog_items")
-    .select("id,price_cents")
+    .select("id,price_cents,item_type")
     .eq("id", catalogItemId)
     .eq("status", "published")
     .in("item_type", ["class", "camp"])
@@ -55,6 +56,33 @@ export async function startRegistration(formData: FormData) {
     redirect(
       `/register/${catalogItemId}?error=${encodeURIComponent(participantError?.message ?? "Unable to save participant details.")}`,
     );
+
+  if (item.item_type === "camp" && campWaiverAccepted !== "yes")
+    redirect(
+      `/register/${catalogItemId}?error=Please+review+and+accept+the+camp+participation+waiver.`,
+    );
+
+  if (item.item_type === "camp") {
+    const { error: consentError } = await supabase
+      .from("legal_consents")
+      .upsert(
+        {
+          account_id: user.sub,
+          participant_id: participant.id,
+          catalog_item_id: item.id,
+          document: "camp_waiver",
+          version: "2026-11-25",
+        },
+        {
+          onConflict:
+            "account_id,participant_id,catalog_item_id,document,version",
+        },
+      );
+    if (consentError)
+      redirect(
+        `/register/${catalogItemId}?error=${encodeURIComponent("Unable to record your camp waiver acknowledgment. Please try again.")}`,
+      );
+  }
 
   if (waitlistEntryId) {
     const { data: waitlistEntry } = await supabase
